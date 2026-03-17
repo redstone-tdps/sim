@@ -26,6 +26,58 @@ body {
   min-height: 100vh;
 }
 
+.site-header {
+  max-width: 1200px;
+  margin: 0.9rem auto 0;
+  padding: 0 1.25rem;
+}
+
+.site-header-inner {
+  padding: 0.58rem 0.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.brand-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.brand-prefix {
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.brand-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  text-decoration: none;
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.brand-logo {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+}
+
+.repo-link {
+  text-decoration: none;
+  font-weight: 600;
+  color: #2a516f;
+}
+
+.repo-link:hover,
+.brand-link:hover {
+  color: var(--accent-dark);
+}
+
 .layout {
   max-width: 1200px;
   margin: 0 auto;
