@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Skid-Steer Car Simulator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/neo.min.css" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <main class="layout">
+    <section class="panel sim-panel">
+      <div class="sim-header">
+        <h1>Skid-Steer Car Simulator</h1>
+        <div class="hint">Track width = 0.2m, wheelbase = 0.4m</div>
+      </div>
+      <div class="sim-config" id="simConfigPanel">
+        <div class="cfg-item">
+          <label for="cfgTrackWidth">w (track width, m)</label>
+          <input id="cfgTrackWidth" type="number" min="0.1" max="5" step="0.1" value="0.2" />
+        </div>
+
+        <div class="cfg-item">
+          <label for="cfgWheelBase">l (wheelbase, m)</label>
+          <input id="cfgWheelBase" type="number" min="0.1" max="8" step="0.1" value="0.4" />
+        </div>
+
+        <div class="cfg-item">
+          <label for="cfgMaxWheelSpeed">max wheel speed (m/s)</label>
+          <input id="cfgMaxWheelSpeed" type="number" min="0.2" max="20" step="0.1" value="4.0" />
+        </div>
+
+        <div class="cfg-item">
+          <label for="cfgWheelVisualScale">wheel visual scale</label>
+          <input id="cfgWheelVisualScale" type="number" min="0.2" max="3" step="0.05" value="1.0" />
+        </div>
+
+        <div class="cfg-item">
+          <label for="cfgTrailPoints">trail points</label>
+          <input id="cfgTrailPoints" type="number" min="50" max="20000" step="50" value="900" />
+        </div>
+
+        <div class="cfg-item">
+          <label for="cfgMaxDt">max dt (s)</label>
+          <input id="cfgMaxDt" type="number" min="0.005" max="0.2" step="0.005" value="0.04" />
+        </div>
+      </div>
+      <canvas id="simCanvas" width="900" height="560"></canvas>
+    </section>
+
+    <aside class="side">
+      <section class="panel controls">
+        <h2 class="section-title">Wheel Controls</h2>
+        <div class="button-row">
+          <button id="toggleRun" class="safe">Pause</button>
+          <button id="zeroSpeeds" class="secondary">Zero Speeds</button>
+          <button id="resetPose" class="warn">Reset Pose</button>
+        </div>
+
+        <div class="wheel-grid" id="wheelGrid"></div>
+      </section>
+
+      <section class="panel telemetry">
+        <h2 class="section-title">Telemetry</h2>
+        <div class="metrics" id="metrics"></div>
+      </section>
+
+      <section class="panel controls">
+        <h2 class="section-title">Camera Controls</h2>
+        <div class="camera-grid">
+          <label for="camOffsetX">Offset X (px)</label>
+          <input id="camOffsetX" type="range" min="-5000" max="5000" value="0" step="1" />
+          <div class="camera-value" id="camOffsetXVal">0</div>
+
+          <label for="camOffsetY">Offset Y (px)</label>
+          <input id="camOffsetY" type="range" min="-5000" max="5000" value="0" step="1" />
+          <div class="camera-value" id="camOffsetYVal">0</div>
+
+          <label for="camZoom">Zoom (px/m)</label>
+          <input id="camZoom" type="range" min="10" max="300" value="220" step="1" />
+          <div class="camera-value" id="camZoomVal">220</div>
+        </div>
+        <div class="button-row" style="margin-top: 0.6rem;">
+          <button id="camFollowToggle" class="secondary">Follow Car: Off</button>
+          <button id="camReset" class="warn">Reset Camera</button>
+        </div>
+      </section>
+
+      <section class="panel code">
+        <h2 class="section-title">Code Control</h2>
+        <textarea id="codeInput">// This code runs every frame while code mode is enabled.
+// API: api.time, api.dt, api.pose, api.wheelSpeeds
+// API: api.setWheelSpeeds(vFL, vFR, vRL, vRR)
+// API: api.setWheelSpeed(name, value)  // name in FL, FR, RL, RR
+
+const base = 1.2;
+const turn = 0.8 * Math.sin(api.time * 0.8);
+api.setWheelSpeeds(base - turn, base + turn, base - turn, base + turn);</textarea>
+        <div class="button-row" style="margin-top: 0.6rem;">
+          <button id="enableCode" class="safe">Enable Code Mode</button>
+          <button id="runOnce" class="secondary">Run Once</button>
+          <button id="disableCode" class="warn">Disable Code Mode</button>
+          <button id="clearDebug" class="secondary">Clear Debug</button>
+        </div>
+        <div class="status" id="codeStatus">Code mode disabled.</div>
+        <div class="debug-log" id="debugLog" aria-label="Code Debug Output"></div>
+      </section>
+    </aside>
+  </main>
+
+  <script src="./car_pose.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
