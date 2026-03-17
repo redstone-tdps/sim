@@ -34,6 +34,7 @@ const cfgTrackPreset = document.getElementById("cfgTrackPreset");
 const cfgLineWidth = document.getElementById("cfgLineWidth");
 const cfgSvgPath = document.getElementById("cfgSvgPath");
 const cfgSensors = document.getElementById("cfgSensors");
+const applyTrack = document.getElementById("applyTrack");
 const applyTrackSensors = document.getElementById("applyTrackSensors");
 const startTrackDraw = document.getElementById("startTrackDraw");
 const finishTrackDraw = document.getElementById("finishTrackDraw");
@@ -512,7 +513,7 @@ function drawPresetTrackPath(targetCtx, preset) {
   if (preset === "figure8") {
     const r = 0.7;
     targetCtx.arc(-r, 0, r, 0, 2 * Math.PI);
-    targetCtx.moveTo(0, 0);
+    targetCtx.moveTo(2 * r, 0);
     targetCtx.arc(r, 0, r, 0, 2 * Math.PI);
     return;
   }
@@ -1112,7 +1113,8 @@ for (const configInput of [
   configInput.addEventListener("change", applySimConfigFromInputs);
 }
 
-applyTrackSensors.addEventListener("click", applyTrackAndSensorConfig);
+if (applyTrack) applyTrack.addEventListener("click", applyTrackAndSensorConfig);
+if (applyTrackSensors) applyTrackSensors.addEventListener("click", applyTrackAndSensorConfig);
 startTrackDraw.addEventListener("click", beginTrackDraw);
 finishTrackDraw.addEventListener("click", finishTrackDrawMode);
 clearTrackDraw.addEventListener("click", clearTrackDraft);

@@ -4,11 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Skid-Steer Car Simulator</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css" />
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/neo.min.css" />
+  <link rel="stylesheet" href="./dep/fonts.css">
+  <link rel="stylesheet" href="./dep/codemirror.min.css" />
+  <link rel="stylesheet" href="./dep/neo.min.css" />
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
@@ -59,6 +57,36 @@
         <div class="cfg-item">
           <label for="cfgMaxDt">max dt (s)</label>
           <input id="cfgMaxDt" type="number" min="0.005" max="0.2" step="0.005" value="0.04" />
+        </div>
+
+        <div class="cfg-item">
+          <label for="visionCamX">cam x (forward, m)</label>
+          <input id="visionCamX" type="number" min="-1" max="2" step="0.01" value="0.18" />
+        </div>
+
+        <div class="cfg-item">
+          <label for="visionCamY">cam y (left, m)</label>
+          <input id="visionCamY" type="number" min="-1" max="1" step="0.01" value="0.00" />
+        </div>
+
+        <div class="cfg-item">
+          <label for="visionCamZ">cam z (up, m)</label>
+          <input id="visionCamZ" type="number" min="0.05" max="2" step="0.01" value="0.16" />
+        </div>
+
+        <div class="cfg-item">
+          <label for="visionPitch">pitch down (deg)</label>
+          <input id="visionPitch" type="number" min="0" max="89" step="0.5" value="28" />
+        </div>
+
+        <div class="cfg-item">
+          <label for="visionFovH">fov horizontal (deg)</label>
+          <input id="visionFovH" type="number" min="20" max="170" step="1" value="70" />
+        </div>
+
+        <div class="cfg-item">
+          <label for="visionFovV">fov vertical (deg)</label>
+          <input id="visionFovV" type="number" min="20" max="170" step="1" value="56" />
         </div>
       </div>
       <canvas id="simCanvas" width="900" height="560"></canvas>
@@ -177,17 +205,19 @@ api.mem.keys()</pre>
 
       <section class="panel telemetry">
         <h2 class="section-title">Telemetry</h2>
+        <div class="status" id="visionStatus" style="margin-bottom: 0.6rem;">Vision ready. OpenCV.js: loading...</div>
+        <canvas id="visionCanvas" class="vision-canvas" width="360" height="220" aria-label="Simulated Car Camera View"></canvas>
         <div class="metrics" id="metrics"></div>
       </section>
 
       <section class="panel controls">
-        <h2 class="section-title">Track & IR Sensors</h2>
+        <h2 class="section-title">Track</h2>
         <div class="track-grid">
           <label for="cfgTrackPreset">track type</label>
           <select id="cfgTrackPreset">
             <option value="oval">Oval</option>
-            <option value="circle" selected>Circle</option>
-            <option value="figure8">Figure 8</option>
+            <option value="circle">Circle</option>
+            <option value="figure8" selected>Figure 8</option>
             <option value="svg">SVG Path</option>
           </select>
 
@@ -196,6 +226,17 @@ api.mem.keys()</pre>
         </div>
         <label class="mini-label" for="cfgSvgPath">svg path (meters, e.g. M -1 0 L 1 0)</label>
         <textarea id="cfgSvgPath" class="small-textarea">M 0 0 L 1.2 0 L 1.2 0.8 L 0 0.8 Z</textarea>
+        <div class="button-row" style="margin-top: 0.6rem;">
+          <button id="applyTrack" class="safe">Apply Track</button>
+          <button id="startTrackDraw" class="secondary">Start Draw</button>
+          <button id="finishTrackDraw" class="secondary">Finish Draw</button>
+          <button id="clearTrackDraw" class="warn">Clear Draw</button>
+        </div>
+        <div class="status" id="trackStatus">Track ready.</div>
+      </section>
+
+      <section class="panel controls">
+        <h2 class="section-title">IR Sensors</h2>
         <label class="mini-label" for="cfgSensors">sensor config (JSON array in car local coords, x=forward, y=left)</label>
         <textarea id="cfgSensors" class="small-textarea">[
   {"name":"L","x":0.16,"y":0.05},
@@ -203,12 +244,8 @@ api.mem.keys()</pre>
   {"name":"R","x":0.16,"y":-0.05}
 ]</textarea>
         <div class="button-row" style="margin-top: 0.6rem;">
-          <button id="applyTrackSensors" class="safe">Apply Track/Sensors</button>
-          <button id="startTrackDraw" class="secondary">Start Draw</button>
-          <button id="finishTrackDraw" class="secondary">Finish Draw</button>
-          <button id="clearTrackDraw" class="warn">Clear Draw</button>
+          <button id="applyTrackSensors" class="safe">Apply Sensors</button>
         </div>
-        <div class="status" id="trackStatus">Track ready. Sensor API available as api.sensors and api.getSensor(name).</div>
       </section>
 
       <section class="panel controls">
@@ -232,38 +269,13 @@ api.mem.keys()</pre>
         </div>
       </section>
 
-      <section class="panel controls">
-        <h2 class="section-title">Car Vision</h2>
-        <div class="track-grid">
-          <label for="visionCamX">cam x (forward, m)</label>
-          <input id="visionCamX" type="number" min="-1" max="2" step="0.01" value="0.18" />
-
-          <label for="visionCamY">cam y (left, m)</label>
-          <input id="visionCamY" type="number" min="-1" max="1" step="0.01" value="0.00" />
-
-          <label for="visionCamZ">cam z (up, m)</label>
-          <input id="visionCamZ" type="number" min="0.05" max="2" step="0.01" value="0.16" />
-
-          <label for="visionPitch">pitch down (deg)</label>
-          <input id="visionPitch" type="number" min="0" max="89" step="0.5" value="28" />
-
-          <label for="visionFovH">fov horizontal (deg)</label>
-          <input id="visionFovH" type="number" min="20" max="170" step="1" value="70" />
-
-          <label for="visionFovV">fov vertical (deg)</label>
-          <input id="visionFovV" type="number" min="20" max="170" step="1" value="56" />
-        </div>
-        <div class="status" id="visionStatus" style="margin-top: 0.6rem;">Vision ready. OpenCV.js: loading...</div>
-        <canvas id="visionCanvas" class="vision-canvas" width="360" height="220" aria-label="Simulated Car Camera View"></canvas>
-      </section>
-
     </aside>
   </main>
 
   <script src="./car_pose.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
-  <script async src="https://cdn.jsdelivr.net/npm/@techstark/opencv-js@4.12.0-release.1/dist/opencv.min.js"></script>
+  <script src="./dep/codemirror.min.js"></script>
+  <script src="./dep/javascript.min.js"></script>
+  <script async src="./dep/opencv.min.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>
