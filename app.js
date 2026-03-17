@@ -19,12 +19,17 @@ const camFollowToggle = document.getElementById("camFollowToggle");
 const camReset = document.getElementById("camReset");
 const visionCanvas = document.getElementById("visionCanvas");
 const visionCtx = visionCanvas.getContext("2d", { willReadFrequently: true });
+const visionRawCanvas = document.createElement("canvas");
+visionRawCanvas.width = visionCanvas.width;
+visionRawCanvas.height = visionCanvas.height;
+const visionRawCtx = visionRawCanvas.getContext("2d", { willReadFrequently: true });
 const visionCamX = document.getElementById("visionCamX");
 const visionCamY = document.getElementById("visionCamY");
 const visionCamZ = document.getElementById("visionCamZ");
 const visionPitch = document.getElementById("visionPitch");
 const visionFovH = document.getElementById("visionFovH");
 const visionFovV = document.getElementById("visionFovV");
+const toggleOverlay = document.getElementById("toggleOverlay");
 const visionStatus = document.getElementById("visionStatus");
 const cfgTrackWidth = document.getElementById("cfgTrackWidth");
 const cfgWheelBase = document.getElementById("cfgWheelBase");
@@ -104,6 +109,9 @@ const sim = {
     fovHDeg: 70,
     fovVDeg: 56,
     opencvReady: false,
+    showOverlay: true,
+    overlayPrimitives: [],
+    maxOverlayPrimitives: 400,
   },
   debugLines: [],
   maxDebugLines: 180,
@@ -158,6 +166,13 @@ function setIoStatus(message, isError = false) {
 function setVisionStatus(message, isError = false) {
   visionStatus.textContent = message;
   visionStatus.style.color = isError ? "#9e352f" : "#27465f";
+}
+
+function updateOverlayToggleButton() {
+  if (!toggleOverlay) return;
+  toggleOverlay.innerHTML = sim.vision.showOverlay
+    ? "<i class=\"bi bi-eye\"></i><span>Overlays: On</span>"
+    : "<i class=\"bi bi-eye-slash\"></i><span>Overlays: Off</span>";
 }
 
 function bodyToWorld(localX, localY, pose) {
@@ -395,6 +410,70 @@ function applyImportedPayload(payload) {
   applyVisionConfigFromInputs();
 }
 
+function toFiniteNumber(value, fallback = 0) {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : fallback;
+}
+
+function toOverlayStyle(options) {
+  const source = options && typeof options === "object" ? options : {};
+  const stroke = typeof source.stroke === "string" ? source.stroke : "#ff375f";
+  const fill = typeof source.fill === "string" ? source.fill : null;
+  const lineWidth = clamp(toFiniteNumber(source.lineWidth, 2), 0.5, 20);
+  const alpha = clamp(toFiniteNumber(source.alpha, 1), 0, 1);
+  return { stroke, fill, lineWidth, alpha };
+}
+
+function pushVisionOverlayPrimitive(primitive) {
+  sim.vision.overlayPrimitives.push(primitive);
+  if (sim.vision.overlayPrimitives.length > sim.vision.maxOverlayPrimitives) {
+    sim.vision.overlayPrimitives.shift();
+  }
+}
+
+function clearVisionOverlayPrimitives() {
+  sim.vision.overlayPrimitives = [];
+}
+
+function drawVisionOverlayPrimitives() {
+  if (sim.vision.overlayPrimitives.length === 0) return;
+
+  visionCtx.save();
+  for (const primitive of sim.vision.overlayPrimitives) {
+    const style = primitive.style || { stroke: "#ff375f", fill: null, lineWidth: 2, alpha: 1 };
+    visionCtx.globalAlpha = style.alpha;
+    visionCtx.strokeStyle = style.stroke;
+    visionCtx.fillStyle = style.fill || "transparent";
+    visionCtx.lineWidth = style.lineWidth;
+
+    if (primitive.type === "line") {
+      visionCtx.beginPath();
+      visionCtx.moveTo(primitive.x1, primitive.y1);
+      visionCtx.lineTo(primitive.x2, primitive.y2);
+      visionCtx.stroke();
+      continue;
+    }
+
+    if (primitive.type === "rect") {
+      if (style.fill) {
+        visionCtx.fillRect(primitive.x, primitive.y, primitive.w, primitive.h);
+      }
+      visionCtx.strokeRect(primitive.x, primitive.y, primitive.w, primitive.h);
+      continue;
+    }
+
+    if (primitive.type === "circle") {
+      visionCtx.beginPath();
+      visionCtx.arc(primitive.x, primitive.y, primitive.r, 0, 2 * Math.PI);
+      if (style.fill) {
+        visionCtx.fill();
+      }
+      visionCtx.stroke();
+    }
+  }
+  visionCtx.restore();
+}
+
 function executeController(dt) {
   if (!sim.controller) return;
 
@@ -411,8 +490,38 @@ function executeController(dt) {
     getVisionFrame: () => ({
       width: visionCanvas.width,
       height: visionCanvas.height,
-      imageData: visionCtx.getImageData(0, 0, visionCanvas.width, visionCanvas.height),
+      imageData: visionRawCtx.getImageData(0, 0, visionCanvas.width, visionCanvas.height),
     }),
+    drawLine: (x1, y1, x2, y2, options = {}) => {
+      pushVisionOverlayPrimitive({
+        type: "line",
+        x1: toFiniteNumber(x1),
+        y1: toFiniteNumber(y1),
+        x2: toFiniteNumber(x2),
+        y2: toFiniteNumber(y2),
+        style: toOverlayStyle(options),
+      });
+    },
+    drawRect: (x, y, w, h, options = {}) => {
+      pushVisionOverlayPrimitive({
+        type: "rect",
+        x: toFiniteNumber(x),
+        y: toFiniteNumber(y),
+        w: toFiniteNumber(w),
+        h: toFiniteNumber(h),
+        style: toOverlayStyle(options),
+      });
+    },
+    drawCircle: (x, y, r, options = {}) => {
+      pushVisionOverlayPrimitive({
+        type: "circle",
+        x: toFiniteNumber(x),
+        y: toFiniteNumber(y),
+        r: Math.max(0, toFiniteNumber(r)),
+        style: toOverlayStyle(options),
+      });
+    },
+    clearOverlay: clearVisionOverlayPrimitives,
     mem: createScriptMemoryApi(),
     setWheelSpeed,
     setWheelSpeeds,
@@ -465,6 +574,7 @@ function updateOpenCvStatus() {
 function renderVision() {
   const width = visionCanvas.width;
   const height = visionCanvas.height;
+  const drawCtx = visionRawCtx;
   const tanHalfH = Math.tan((sim.vision.fovHDeg * Math.PI / 180) * 0.5);
   const tanHalfV = Math.tan((sim.vision.fovVDeg * Math.PI / 180) * 0.5);
   const fx = width / (2 * tanHalfH);
@@ -477,17 +587,17 @@ function renderVision() {
   const sp = Math.sin(pitchRad);
 
   const horizonY = cy - fy * Math.tan(pitchRad);
-  visionCtx.fillStyle = "#c9e0f3";
-  visionCtx.fillRect(0, 0, width, Math.max(0, Math.min(height, horizonY)));
-  visionCtx.fillStyle = "#d6cdbb";
-  visionCtx.fillRect(0, Math.max(0, Math.min(height, horizonY)), width, height);
+  drawCtx.fillStyle = "#c9e0f3";
+  drawCtx.fillRect(0, 0, width, Math.max(0, Math.min(height, horizonY)));
+  drawCtx.fillStyle = "#d6cdbb";
+  drawCtx.fillRect(0, Math.max(0, Math.min(height, horizonY)), width, height);
 
-  visionCtx.strokeStyle = "rgba(20, 45, 66, 0.35)";
-  visionCtx.lineWidth = 1;
-  visionCtx.beginPath();
-  visionCtx.moveTo(0, horizonY);
-  visionCtx.lineTo(width, horizonY);
-  visionCtx.stroke();
+  drawCtx.strokeStyle = "rgba(20, 45, 66, 0.35)";
+  drawCtx.lineWidth = 1;
+  drawCtx.beginPath();
+  drawCtx.moveTo(0, horizonY);
+  drawCtx.lineTo(width, horizonY);
+  drawCtx.stroke();
 
   const forward = { x: cp, y: 0, z: -sp };
   const right = { x: 0, y: -1, z: 0 };
@@ -521,7 +631,7 @@ function renderVision() {
     return { x: px, y: py, z: camZ };
   };
 
-  visionCtx.fillStyle = "#202020";
+  drawCtx.fillStyle = "#202020";
 
   for (const line of sim.track.visionPolyline) {
     const halfW = sim.track.lineWidth * 0.5;
@@ -535,16 +645,16 @@ function renderVision() {
         return;
       }
 
-      visionCtx.beginPath();
-      visionCtx.moveTo(runLeft[0].x, runLeft[0].y);
+      drawCtx.beginPath();
+      drawCtx.moveTo(runLeft[0].x, runLeft[0].y);
       for (let i = 1; i < runLeft.length; i += 1) {
-        visionCtx.lineTo(runLeft[i].x, runLeft[i].y);
+        drawCtx.lineTo(runLeft[i].x, runLeft[i].y);
       }
       for (let i = runRight.length - 1; i >= 0; i -= 1) {
-        visionCtx.lineTo(runRight[i].x, runRight[i].y);
+        drawCtx.lineTo(runRight[i].x, runRight[i].y);
       }
-      visionCtx.closePath();
-      visionCtx.fill();
+      drawCtx.closePath();
+      drawCtx.fill();
       runLeft = [];
       runRight = [];
     };
@@ -590,6 +700,14 @@ function renderVision() {
 
     flushRun();
   }
+
+  visionCtx.clearRect(0, 0, width, height);
+  visionCtx.drawImage(visionRawCanvas, 0, 0, width, height);
+
+  if (sim.vision.showOverlay) {
+    drawVisionOverlayPrimitives();
+  }
+  clearVisionOverlayPrimitives();
 }
 
 function setStatus(message, isError = false) {
@@ -1356,6 +1474,13 @@ if (importJsonFile) {
   });
 }
 
+if (toggleOverlay) {
+  toggleOverlay.addEventListener("click", () => {
+    sim.vision.showOverlay = !sim.vision.showOverlay;
+    updateOverlayToggleButton();
+  });
+}
+
 canvas.addEventListener("mousedown", (event) => {
   if (sim.track.drawMode) {
     const rect = canvas.getBoundingClientRect();
@@ -1500,6 +1625,7 @@ syncVisionInputs();
 renderMemoryView();
 applyTrackAndSensorConfig();
 applyVisionConfigFromInputs();
+updateOverlayToggleButton();
 updateCodeModeButton();
 addDebugLine("Debug ready. Use api.log(...) and api.clearLog().");
 requestAnimationFrame(loop);

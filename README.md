@@ -80,12 +80,12 @@ Then open `http://localhost:8000`.
 
 ### 6) Code mode (embedded controller)
 - Edit JavaScript in the built-in editor (CodeMirror)
-- `Enable Code Mode`: run script every simulation frame
+- `Enable/Disable Code Mode`: toggle script execution every simulation frame
 - `Run Once`: execute a single step
-- `Disable Code Mode`
+- `Clear Memory`: clear `api.mem` state
 - `Clear Debug`
 
-The script can read sensors, set wheel speeds, use persistent script memory, and log to the debug panel.
+The script can read vision frames/sensors, set wheel speeds, draw overlay primitives on the telemetry camera view, use persistent script memory, and log to the debug panel.
 
 ## Script API
 
@@ -96,6 +96,10 @@ When your controller runs, it receives an `api` object with:
 - `api.pose`
 - `api.wheelSpeeds`
 - `api.getVisionFrame()` (returns `{ width, height, imageData }` from vision canvas)
+- `api.drawLine(x1, y1, x2, y2, options)`
+- `api.drawRect(x, y, w, h, options)`
+- `api.drawCircle(x, y, r, options)`
+- `api.clearOverlay()`
 - `api.sensors`
 - `api.getSensor(name)`
 - `api.setWheelSpeed(name, value)`

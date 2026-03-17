@@ -107,10 +107,13 @@
 
       <section class="code code-inline">
         <h2 class="section-title">Code Control</h2>
-        <textarea id="codeInput">// API demo: OpenCV-based line follower (camera only, no IR sensors).
-// Uses: api.cv, api.getVisionFrame, api.setWheelSpeeds, api.clamp, api.mem.*, api.log
+        <textarea id="codeInput">// API demo: OpenCV line follower + telemetry overlays.
+      // Uses: api.cv, api.getVisionFrame, api.drawRect, api.drawLine, api.drawCircle,
+      //       api.setWheelSpeeds, api.clamp, api.mem.*, api.log
 
 const cv = api.cv;
+      api.clearOverlay();
+
 if (!cv) {
   api.setWheelSpeeds(0, 0, 0, 0);
   if (!api.mem.get("opencvWaitLogged", false)) {
@@ -140,13 +143,22 @@ const roiRect = new cv.Rect(0, y0, frame.width, h);
 const roi = binary.roi(roiRect);
 const m = cv.moments(roi, true);
 
+// Overlay: ROI box + image center line
+api.drawRect(0, y0, frame.width, h, { stroke: "#53a7ff", lineWidth: 2, alpha: 0.8 });
+api.drawLine(frame.width * 0.5, y0, frame.width * 0.5, frame.height, { stroke: "#53a7ff", lineWidth: 2, alpha: 0.7 });
+
 const prevError = api.mem.get("prevError", 0);
 const lastTurn = api.mem.get("lastTurn", 1);
 
 if (m.m00 > 1e-3) {
   const cx = m.m10 / m.m00;
+  const cy = m.m01 / m.m00 + y0;
   const error = (cx - frame.width * 0.5) / (frame.width * 0.5);
   const dError = error - prevError;
+
+  // Overlay: detected centroid + steering line
+  api.drawCircle(cx, cy, 6, { stroke: "#35dd72", fill: "#35dd72", lineWidth: 2, alpha: 0.9 });
+  api.drawLine(frame.width * 0.5, frame.height - 6, cx, cy, { stroke: "#35dd72", lineWidth: 2, alpha: 0.85 });
 
   const base = 0.34;
   const kP = 0.95;
@@ -160,6 +172,8 @@ if (m.m00 > 1e-3) {
   api.mem.set("prevError", error);
   api.mem.set("lastTurn", turn >= 0 ? 1 : -1);
 } else {
+  // Overlay: no line found state
+  api.drawRect(8, 8, frame.width - 16, frame.height - 16, { stroke: "#ff5c6d", lineWidth: 2, alpha: 0.7 });
   const dir = lastTurn;
   const pivot = 0.30;
   api.setWheelSpeeds(dir * pivot, -dir * pivot, dir * pivot, -dir * pivot);
@@ -182,6 +196,10 @@ api.dt
 api.pose
 api.wheelSpeeds
 api.getVisionFrame()
+api.drawLine(x1, y1, x2, y2, options)
+api.drawRect(x, y, w, h, options)
+api.drawCircle(x, y, r, options)
+api.clearOverlay()
 api.sensors
 api.getSensor(name)
 api.cv
@@ -216,6 +234,9 @@ api.mem.keys()</pre>
 
       <section class="panel telemetry">
         <h2 class="section-title">Telemetry</h2>
+        <div class="button-row" style="margin-bottom: 0.5rem;">
+          <button id="toggleOverlay" class="secondary"><i class="bi bi-eye"></i><span>Overlays: On</span></button>
+        </div>
         <div class="status" id="visionStatus" style="margin-bottom: 0.6rem;">Vision ready. OpenCV.js: loading...</div>
         <canvas id="visionCanvas" class="vision-canvas" width="360" height="220" aria-label="Simulated Car Camera View"></canvas>
         <div class="metrics" id="metrics"></div>
