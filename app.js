@@ -81,7 +81,7 @@ const sim = {
     followCar: false,
   },
   track: {
-    preset: "circle",
+    preset: "figure8",
     lineWidth: 0.03,
     svgPath: cfgSvgPath.value,
     sensors: [],
