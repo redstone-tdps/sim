@@ -8,6 +8,7 @@ It lets you:
 - build or choose line tracks,
 - read virtual IR sensors,
 - run custom JavaScript control logic each frame (line follower, search behavior, etc.),
+- view a simulated forward-facing car camera,
 - inspect telemetry and debug output.
 
 ## What this project does
@@ -67,7 +68,17 @@ Then open `http://localhost:8000`.
 - Toggle follow-car mode
 - Reset camera
 
-### 5) Code mode (embedded controller)
+### 5) Car vision camera
+- Simulated pinhole camera output in a dedicated vision panel
+- Configurable camera pose in car frame:
+	- `x` (forward)
+	- `y` (left)
+	- `z` (up)
+	- pitch down angle (degrees)
+- Vision rendering projects rays to the ground plane and samples the track mask, producing a simple line-view feed.
+- OpenCV.js load state is shown in the vision status message.
+
+### 6) Code mode (embedded controller)
 - Edit JavaScript in the built-in editor (CodeMirror)
 - `Enable Code Mode`: run script every simulation frame
 - `Run Once`: execute a single step
@@ -84,11 +95,13 @@ When your controller runs, it receives an `api` object with:
 - `api.dt`
 - `api.pose`
 - `api.wheelSpeeds`
+- `api.getVisionFrame()` (returns `{ width, height, imageData }` from vision canvas)
 - `api.sensors`
 - `api.getSensor(name)`
 - `api.setWheelSpeed(name, value)`
 - `api.setWheelSpeeds(vFL, vFR, vRL, vRR)`
 - `api.clamp(value, min, max)`
+- `api.cv` (OpenCV object when loaded, otherwise `null`)
 - `api.log(...args)`
 - `api.clearLog()`
 - `api.mem.get(key, defaultValue)`
@@ -108,3 +121,4 @@ When your controller runs, it receives an `api` object with:
 
 - Intended for modern browsers with Canvas 2D support.
 - External CDN dependencies are used for CodeMirror and Google Fonts.
+- OpenCV.js is loaded from the official OpenCV docs CDN.

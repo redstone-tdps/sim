@@ -15,6 +15,15 @@ const camOffsetYVal = document.getElementById("camOffsetYVal");
 const camZoomVal = document.getElementById("camZoomVal");
 const camFollowToggle = document.getElementById("camFollowToggle");
 const camReset = document.getElementById("camReset");
+const visionCanvas = document.getElementById("visionCanvas");
+const visionCtx = visionCanvas.getContext("2d", { willReadFrequently: true });
+const visionCamX = document.getElementById("visionCamX");
+const visionCamY = document.getElementById("visionCamY");
+const visionCamZ = document.getElementById("visionCamZ");
+const visionPitch = document.getElementById("visionPitch");
+const visionFovH = document.getElementById("visionFovH");
+const visionFovV = document.getElementById("visionFovV");
+const visionStatus = document.getElementById("visionStatus");
 const cfgTrackWidth = document.getElementById("cfgTrackWidth");
 const cfgWheelBase = document.getElementById("cfgWheelBase");
 const cfgMaxWheelSpeed = document.getElementById("cfgMaxWheelSpeed");
@@ -77,8 +86,18 @@ const sim = {
     sensors: [],
     sensorReadings: [],
     svgPath2D: null,
+    visionPolyline: [],
     drawMode: false,
     draftPoints: [],
+  },
+  vision: {
+    camX: 0.18,
+    camY: 0,
+    camZ: 0.16,
+    pitchDeg: 28,
+    fovHDeg: 70,
+    fovVDeg: 56,
+    opencvReady: false,
   },
   debugLines: [],
   maxDebugLines: 180,
@@ -122,6 +141,11 @@ function updateWheelValue(name) {
 function setTrackStatus(message, isError = false) {
   trackStatus.textContent = message;
   trackStatus.style.color = isError ? "#9e352f" : "#27465f";
+}
+
+function setVisionStatus(message, isError = false) {
+  visionStatus.textContent = message;
+  visionStatus.style.color = isError ? "#9e352f" : "#27465f";
 }
 
 function bodyToWorld(localX, localY, pose) {
@@ -240,16 +264,150 @@ function executeController(dt) {
     wheelSpeeds: { ...sim.wheelSpeeds },
     sensors,
     getSensor: (name) => sensorMap.get(name),
+    getVisionFrame: () => ({
+      width: visionCanvas.width,
+      height: visionCanvas.height,
+      imageData: visionCtx.getImageData(0, 0, visionCanvas.width, visionCanvas.height),
+    }),
     mem: createScriptMemoryApi(),
     setWheelSpeed,
     setWheelSpeeds,
     log: (...parts) => addDebugLine(...parts),
     clearLog: clearDebugLog,
     clamp,
+    cv: sim.vision.opencvReady ? window.cv : null,
     Math,
   };
 
   sim.controller(api);
+}
+
+function syncVisionInputs() {
+  visionCamX.value = String(sim.vision.camX);
+  visionCamY.value = String(sim.vision.camY);
+  visionCamZ.value = String(sim.vision.camZ);
+  visionPitch.value = String(sim.vision.pitchDeg);
+  visionFovH.value = String(sim.vision.fovHDeg);
+  visionFovV.value = String(sim.vision.fovVDeg);
+}
+
+function applyVisionConfigFromInputs() {
+  sim.vision.camX = readNumberInput(visionCamX, -1, 2, sim.vision.camX);
+  sim.vision.camY = readNumberInput(visionCamY, -1, 1, sim.vision.camY);
+  sim.vision.camZ = readNumberInput(visionCamZ, 0.05, 2, sim.vision.camZ);
+  sim.vision.pitchDeg = readNumberInput(visionPitch, 0, 89, sim.vision.pitchDeg);
+  sim.vision.fovHDeg = readNumberInput(visionFovH, 20, 170, sim.vision.fovHDeg);
+  sim.vision.fovVDeg = readNumberInput(visionFovV, 20, 170, sim.vision.fovVDeg);
+  syncVisionInputs();
+
+  const cvStatus = sim.vision.opencvReady ? "ready" : "loading...";
+  setVisionStatus(
+    `Vision camera updated: x=${n(sim.vision.camX, 2)} y=${n(sim.vision.camY, 2)} z=${n(sim.vision.camZ, 2)} pitch=${n(sim.vision.pitchDeg, 1)}° fovH=${n(sim.vision.fovHDeg, 1)}° fovV=${n(sim.vision.fovVDeg, 1)}°. OpenCV.js: ${cvStatus}`
+  );
+}
+
+function updateOpenCvStatus() {
+  const cv = window.cv;
+  const ready = !!(cv && typeof cv.getBuildInformation === "function");
+  if (ready !== sim.vision.opencvReady) {
+    sim.vision.opencvReady = ready;
+    const status = ready ? "ready" : "loading...";
+    setVisionStatus(
+      `Vision ready. Camera x=${n(sim.vision.camX, 2)} y=${n(sim.vision.camY, 2)} z=${n(sim.vision.camZ, 2)} pitch=${n(sim.vision.pitchDeg, 1)}° fovH=${n(sim.vision.fovHDeg, 1)}° fovV=${n(sim.vision.fovVDeg, 1)}°. OpenCV.js: ${status}`
+    );
+  }
+}
+
+function renderVision() {
+  const width = visionCanvas.width;
+  const height = visionCanvas.height;
+  const tanHalfH = Math.tan((sim.vision.fovHDeg * Math.PI / 180) * 0.5);
+  const tanHalfV = Math.tan((sim.vision.fovVDeg * Math.PI / 180) * 0.5);
+  const fx = width / (2 * tanHalfH);
+  const fy = height / (2 * tanHalfV);
+  const cx = width * 0.5;
+  const cy = height * 0.5;
+
+  const pitchRad = sim.vision.pitchDeg * Math.PI / 180;
+  const cp = Math.cos(pitchRad);
+  const sp = Math.sin(pitchRad);
+
+  const horizonY = cy - fy * Math.tan(pitchRad);
+  visionCtx.fillStyle = "#c9e0f3";
+  visionCtx.fillRect(0, 0, width, Math.max(0, Math.min(height, horizonY)));
+  visionCtx.fillStyle = "#d6cdbb";
+  visionCtx.fillRect(0, Math.max(0, Math.min(height, horizonY)), width, height);
+
+  visionCtx.strokeStyle = "rgba(20, 45, 66, 0.35)";
+  visionCtx.lineWidth = 1;
+  visionCtx.beginPath();
+  visionCtx.moveTo(0, horizonY);
+  visionCtx.lineTo(width, horizonY);
+  visionCtx.stroke();
+
+  const forward = { x: cp, y: 0, z: -sp };
+  const right = { x: 0, y: -1, z: 0 };
+  const down = { x: -sp, y: 0, z: -cp };
+
+  const c = Math.cos(sim.pose.theta);
+  const s = Math.sin(sim.pose.theta);
+
+  const toBodyFromWorld = (wx, wy) => {
+    const dx = wx - sim.pose.x;
+    const dy = wy - sim.pose.y;
+    return {
+      x: dx * c + dy * s,
+      y: -dx * s + dy * c,
+    };
+  };
+
+  const projectWorldPoint = (wx, wy) => {
+    const body = toBodyFromWorld(wx, wy);
+    const vx = body.x - sim.vision.camX;
+    const vy = body.y - sim.vision.camY;
+    const vz = -sim.vision.camZ;
+
+    const camX = vx * right.x + vy * right.y + vz * right.z;
+    const camY = vx * down.x + vy * down.y + vz * down.z;
+    const camZ = vx * forward.x + vy * forward.y + vz * forward.z;
+    if (camZ <= 0.06) return null;
+
+    const px = cx + fx * (camX / camZ);
+    const py = cy + fy * (camY / camZ);
+    const widthPx = clamp((fx * sim.track.lineWidth) / camZ, 1, 18);
+    return { x: px, y: py, width: widthPx };
+  };
+
+  visionCtx.strokeStyle = "#232323";
+  visionCtx.fillStyle = "#202020";
+  visionCtx.lineCap = "round";
+  visionCtx.lineJoin = "round";
+
+  for (const line of sim.track.visionPolyline) {
+    let prev = null;
+    for (const point of line) {
+      const projected = projectWorldPoint(point.x, point.y);
+      if (!projected) {
+        prev = null;
+        continue;
+      }
+
+      if (projected.x >= -30 && projected.x <= width + 30 && projected.y >= -30 && projected.y <= height + 30) {
+        visionCtx.beginPath();
+        visionCtx.arc(projected.x, projected.y, projected.width * 0.45, 0, 2 * Math.PI);
+        visionCtx.fill();
+      }
+
+      if (prev) {
+        visionCtx.lineWidth = (prev.width + projected.width) * 0.5;
+        visionCtx.beginPath();
+        visionCtx.moveTo(prev.x, prev.y);
+        visionCtx.lineTo(projected.x, projected.y);
+        visionCtx.stroke();
+      }
+      prev = projected;
+    }
+  }
 }
 
 function setStatus(message, isError = false) {
@@ -410,6 +568,158 @@ function updateSensorReadings() {
   });
 }
 
+function sampleEllipsePoints(cx, cy, rx, ry, count) {
+  const points = [];
+  for (let i = 0; i <= count; i += 1) {
+    const t = (i / count) * 2 * Math.PI;
+    points.push({ x: cx + rx * Math.cos(t), y: cy + ry * Math.sin(t) });
+  }
+  return points;
+}
+
+function sampleCircleArcPoints(cx, cy, radius, startAngle, endAngle, count) {
+  const points = [];
+  for (let i = 0; i <= count; i += 1) {
+    const t = startAngle + (endAngle - startAngle) * (i / count);
+    points.push({ x: cx + radius * Math.cos(t), y: cy + radius * Math.sin(t) });
+  }
+  return points;
+}
+
+function densifyPolyline(line, maxStep = 0.03) {
+  if (!Array.isArray(line) || line.length < 2) return Array.isArray(line) ? line : [];
+
+  const points = [line[0]];
+  for (let i = 1; i < line.length; i += 1) {
+    const a = line[i - 1];
+    const b = line[i];
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const dist = Math.hypot(dx, dy);
+    const segments = Math.max(1, Math.ceil(dist / maxStep));
+
+    for (let k = 1; k <= segments; k += 1) {
+      const t = k / segments;
+      points.push({
+        x: a.x + dx * t,
+        y: a.y + dy * t,
+      });
+    }
+  }
+
+  return points;
+}
+
+function parseSvgPathToPolyline(pathText) {
+  const tokens = pathText
+    .replace(/,/g, " ")
+    .match(/[a-zA-Z]|[-+]?\d*\.?\d+(?:e[-+]?\d+)?/gi);
+  if (!tokens) return [];
+
+  const lines = [];
+  let index = 0;
+  let command = null;
+  let x = 0;
+  let y = 0;
+  let subStartX = 0;
+  let subStartY = 0;
+  let currentLine = [];
+
+  const isCommand = (token) => /^[a-zA-Z]$/.test(token);
+  const readNumber = () => {
+    if (index >= tokens.length) return null;
+    const token = tokens[index];
+    if (isCommand(token)) return null;
+    const value = Number(token);
+    if (!Number.isFinite(value)) return null;
+    index += 1;
+    return value;
+  };
+
+  while (index < tokens.length) {
+    if (isCommand(tokens[index])) {
+      command = tokens[index];
+      index += 1;
+    }
+    if (!command) break;
+
+    if (command === "M" || command === "m") {
+      const px = readNumber();
+      const py = readNumber();
+      if (px === null || py === null) break;
+      x = command === "m" ? x + px : px;
+      y = command === "m" ? y + py : py;
+      subStartX = x;
+      subStartY = y;
+      if (currentLine.length > 1) lines.push(currentLine);
+      currentLine = [{ x, y }];
+      command = command === "m" ? "l" : "L";
+      continue;
+    }
+
+    if (command === "L" || command === "l") {
+      const px = readNumber();
+      const py = readNumber();
+      if (px === null || py === null) continue;
+      x = command === "l" ? x + px : px;
+      y = command === "l" ? y + py : py;
+      currentLine.push({ x, y });
+      continue;
+    }
+
+    if (command === "H" || command === "h") {
+      const px = readNumber();
+      if (px === null) continue;
+      x = command === "h" ? x + px : px;
+      currentLine.push({ x, y });
+      continue;
+    }
+
+    if (command === "V" || command === "v") {
+      const py = readNumber();
+      if (py === null) continue;
+      y = command === "v" ? y + py : py;
+      currentLine.push({ x, y });
+      continue;
+    }
+
+    if (command === "Z" || command === "z") {
+      if (currentLine.length > 0) {
+        currentLine.push({ x: subStartX, y: subStartY });
+      }
+      if (currentLine.length > 1) lines.push(currentLine);
+      currentLine = [];
+      continue;
+    }
+
+    break;
+  }
+
+  if (currentLine.length > 1) lines.push(currentLine);
+  return lines;
+}
+
+function rebuildVisionTrackPolyline() {
+  let lines = [];
+
+  if (sim.track.preset === "circle") {
+    lines = [sampleCircleArcPoints(1.15, 0, 1.15, Math.PI, 3 * Math.PI, 280)];
+  } else if (sim.track.preset === "figure8") {
+    lines = [
+      sampleEllipsePoints(-0.7, 0, 0.7, 0.7, 170),
+      sampleEllipsePoints(0.7, 0, 0.7, 0.7, 170),
+    ];
+  } else if (sim.track.preset === "oval") {
+    lines = [sampleEllipsePoints(0, 0, 1.45, 0.9, 220)];
+  } else if (sim.track.preset === "svg") {
+    lines = parseSvgPathToPolyline(sim.track.svgPath);
+  }
+
+  sim.track.visionPolyline = lines
+    .filter((line) => Array.isArray(line) && line.length > 1)
+    .map((line) => densifyPolyline(line, 0.03));
+}
+
 function applyTrackAndSensorConfig() {
   try {
     sim.track.preset = cfgTrackPreset.value;
@@ -427,6 +737,7 @@ function applyTrackAndSensorConfig() {
 
     cfgLineWidth.value = String(sim.track.lineWidth);
     rebuildTrackMask();
+    rebuildVisionTrackPolyline();
     updateSensorReadings();
     setTrackStatus(
       `Track applied: ${sim.track.preset}, line width ${n(sim.track.lineWidth, 3)}m, sensors ${sim.track.sensors.length}.`
@@ -784,6 +1095,10 @@ camReset.addEventListener("click", () => {
   updateCameraLabels();
 });
 
+for (const visionInput of [visionCamX, visionCamY, visionCamZ, visionPitch, visionFovH, visionFovV]) {
+  visionInput.addEventListener("change", applyVisionConfigFromInputs);
+}
+
 clearDebug.addEventListener("click", clearDebugLog);
 
 for (const configInput of [
@@ -897,6 +1212,7 @@ document.getElementById("disableCode").addEventListener("click", () => {
 let lastTime = performance.now();
 
 function loop(now) {
+  updateOpenCvStatus();
   const dt = Math.min(sim.maxDt, (now - lastTime) / 1000);
   lastTime = now;
 
@@ -906,6 +1222,7 @@ function loop(now) {
   }
 
   renderScene();
+  renderVision();
   updateMetrics();
 
   requestAnimationFrame(loop);
@@ -930,7 +1247,9 @@ updateMetrics();
 syncCameraInputs();
 updateCameraLabels();
 syncSimConfigInputs();
+syncVisionInputs();
 renderMemoryView();
 applyTrackAndSensorConfig();
+applyVisionConfigFromInputs();
 addDebugLine("Debug ready. Use api.log(...) and api.clearLog().");
 requestAnimationFrame(loop);

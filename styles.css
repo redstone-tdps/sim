@@ -93,7 +93,7 @@ h1 {
   background: #fbfdff;
 }
 
-canvas {
+#simCanvas {
   display: block;
   width: 100%;
   aspect-ratio: 16 / 10;
@@ -103,12 +103,22 @@ canvas {
   cursor: grab;
 }
 
-canvas.dragging {
+#simCanvas.dragging {
   cursor: grabbing;
 }
 
-canvas.draw-mode {
+#simCanvas.draw-mode {
   cursor: crosshair;
+}
+
+.vision-canvas {
+  display: block;
+  width: 100%;
+  margin-top: 0.6rem;
+  border-radius: 12px;
+  border: 1px solid var(--stroke);
+  background: linear-gradient(180deg, #d2e6f7 0%, #eef5fb 38%, #f3eee4 39%, #e4ddd0 100%);
+  aspect-ratio: 360 / 220;
 }
 
 .side {

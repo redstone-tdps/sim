@@ -53,26 +53,50 @@
 
       <section class="code code-inline">
         <h2 class="section-title">Code Control</h2>
-        <textarea id="codeInput">// API demo: line follower using sensors + memory + logging.
-// Uses: api.getSensor, api.setWheelSpeeds, api.clamp, api.mem.*, api.log
+        <textarea id="codeInput">// API demo: OpenCV-based line follower (camera only, no IR sensors).
+// Uses: api.cv, api.getVisionFrame, api.setWheelSpeeds, api.clamp, api.mem.*, api.log
 
-const left = api.getSensor("L")?.value || 0;
-const center = api.getSensor("C")?.value || 0;
-const right = api.getSensor("R")?.value || 0;
+const cv = api.cv;
+if (!cv) {
+  api.setWheelSpeeds(0, 0, 0, 0);
+  if (!api.mem.get("opencvWaitLogged", false)) {
+    api.log("Waiting for OpenCV.js to load...");
+    api.mem.set("opencvWaitLogged", true);
+  }
+  return;
+}
+api.mem.set("opencvWaitLogged", false);
+
+const frame = api.getVisionFrame();
+if (!frame || !frame.imageData) {
+  api.setWheelSpeeds(0, 0, 0, 0);
+  return;
+}
+
+const src = cv.matFromImageData(frame.imageData);
+const gray = new cv.Mat();
+const binary = new cv.Mat();
+
+cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+cv.threshold(gray, binary, 90, 255, cv.THRESH_BINARY_INV);
+
+const y0 = Math.floor(frame.height * 0.45);
+const h = Math.max(1, frame.height - y0);
+const roiRect = new cv.Rect(0, y0, frame.width, h);
+const roi = binary.roi(roiRect);
+const m = cv.moments(roi, true);
 
 const prevError = api.mem.get("prevError", 0);
 const lastTurn = api.mem.get("lastTurn", 1);
-const wasLost = api.mem.get("wasLost", false);
 
-const hasLine = Math.max(left, center, right) > 0.1;
-
-if (hasLine) {
-  const error = (right - left) + 0.25 * (right - center) - 0.25 * (left - center);
+if (m.m00 > 1e-3) {
+  const cx = m.m10 / m.m00;
+  const error = (cx - frame.width * 0.5) / (frame.width * 0.5);
   const dError = error - prevError;
 
-  const base = 0.32;
-  const kP = 1.55;
-  const kD = 0.65;
+  const base = 0.34;
+  const kP = 0.95;
+  const kD = 0.55;
   const turn = kP * error + kD * dError;
 
   const leftCmd = api.clamp(base + turn, -1.2, 1.2);
@@ -81,18 +105,16 @@ if (hasLine) {
 
   api.mem.set("prevError", error);
   api.mem.set("lastTurn", turn >= 0 ? 1 : -1);
-  api.mem.set("wasLost", false);
 } else {
-  // Reacquire behavior when all sensors miss the line.
   const dir = lastTurn;
   const pivot = 0.30;
   api.setWheelSpeeds(dir * pivot, -dir * pivot, dir * pivot, -dir * pivot);
+}
 
-  if (!wasLost) {
-    api.log("line lost -> pivot search", dir > 0 ? "left" : "right");
-    api.mem.set("wasLost", true);
-  }
-}</textarea>
+roi.delete();
+binary.delete();
+gray.delete();
+src.delete();</textarea>
         <div class="button-row" style="margin-top: 0.6rem;">
           <button id="enableCode" class="safe">Enable Code Mode</button>
           <button id="runOnce" class="secondary">Run Once</button>
@@ -106,8 +128,10 @@ if (hasLine) {
 api.dt
 api.pose
 api.wheelSpeeds
+api.getVisionFrame()
 api.sensors
 api.getSensor(name)
+api.cv
 api.setWheelSpeed(name, value)
 api.setWheelSpeeds(vFL, vFR, vRL, vRR)
 api.clamp(value, min, max)
@@ -196,12 +220,38 @@ api.mem.keys()</pre>
         </div>
       </section>
 
+      <section class="panel controls">
+        <h2 class="section-title">Car Vision</h2>
+        <div class="track-grid">
+          <label for="visionCamX">cam x (forward, m)</label>
+          <input id="visionCamX" type="number" min="-1" max="2" step="0.01" value="0.18" />
+
+          <label for="visionCamY">cam y (left, m)</label>
+          <input id="visionCamY" type="number" min="-1" max="1" step="0.01" value="0.00" />
+
+          <label for="visionCamZ">cam z (up, m)</label>
+          <input id="visionCamZ" type="number" min="0.05" max="2" step="0.01" value="0.16" />
+
+          <label for="visionPitch">pitch down (deg)</label>
+          <input id="visionPitch" type="number" min="0" max="89" step="0.5" value="28" />
+
+          <label for="visionFovH">fov horizontal (deg)</label>
+          <input id="visionFovH" type="number" min="20" max="170" step="1" value="70" />
+
+          <label for="visionFovV">fov vertical (deg)</label>
+          <input id="visionFovV" type="number" min="20" max="170" step="1" value="56" />
+        </div>
+        <div class="status" id="visionStatus" style="margin-top: 0.6rem;">Vision ready. OpenCV.js: loading...</div>
+        <canvas id="visionCanvas" class="vision-canvas" width="360" height="220" aria-label="Simulated Car Camera View"></canvas>
+      </section>
+
     </aside>
   </main>
 
   <script src="./car_pose.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
+  <script async src="https://cdn.jsdelivr.net/npm/@techstark/opencv-js@4.12.0-release.1/dist/opencv.min.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>
