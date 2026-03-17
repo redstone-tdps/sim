@@ -4,9 +4,11 @@ const wheelGrid = document.getElementById("wheelGrid");
 const metrics = document.getElementById("metrics");
 const codeInput = document.getElementById("codeInput");
 const codeStatus = document.getElementById("codeStatus");
+const toggleCodeMode = document.getElementById("toggleCodeMode");
 const memoryView = document.getElementById("memoryView");
 const debugLog = document.getElementById("debugLog");
 const clearDebug = document.getElementById("clearDebug");
+const clearMemory = document.getElementById("clearMemory");
 const camOffsetX = document.getElementById("camOffsetX");
 const camOffsetY = document.getElementById("camOffsetY");
 const camZoom = document.getElementById("camZoom");
@@ -34,6 +36,9 @@ const cfgTrackPreset = document.getElementById("cfgTrackPreset");
 const cfgLineWidth = document.getElementById("cfgLineWidth");
 const cfgSvgPath = document.getElementById("cfgSvgPath");
 const cfgSensors = document.getElementById("cfgSensors");
+const exportJson = document.getElementById("exportJson");
+const importJson = document.getElementById("importJson");
+const importJsonFile = document.getElementById("importJsonFile");
 const applyTrack = document.getElementById("applyTrack");
 const applyTrackSensors = document.getElementById("applyTrackSensors");
 const startTrackDraw = document.getElementById("startTrackDraw");
@@ -144,6 +149,12 @@ function setTrackStatus(message, isError = false) {
   trackStatus.style.color = isError ? "#9e352f" : "#27465f";
 }
 
+function setIoStatus(message, isError = false) {
+  if (isError) {
+    window.alert(message);
+  }
+}
+
 function setVisionStatus(message, isError = false) {
   visionStatus.textContent = message;
   visionStatus.style.color = isError ? "#9e352f" : "#27465f";
@@ -248,8 +259,140 @@ function updateMetrics() {
 }
 
 function compileController() {
-  const source = codeEditor ? codeEditor.getValue() : codeInput.value;
+  const source = getControllerSource();
   sim.controller = new Function("api", source);
+}
+
+function getControllerSource() {
+  return codeEditor ? codeEditor.getValue() : codeInput.value;
+}
+
+function setControllerSource(source) {
+  const text = typeof source === "string" ? source : "";
+  if (codeEditor) {
+    codeEditor.setValue(text);
+  } else {
+    codeInput.value = text;
+  }
+}
+
+function buildExportPayload() {
+  let sensors = [];
+  try {
+    sensors = parseSensorConfig(cfgSensors.value);
+  } catch {
+    sensors = [];
+  }
+
+  return {
+    schema: "skid-steer-sim-config-v1",
+    exportedAt: new Date().toISOString(),
+    settings: {
+      trackWidth: Number(cfgTrackWidth.value),
+      wheelBase: Number(cfgWheelBase.value),
+      maxWheelSpeed: Number(cfgMaxWheelSpeed.value),
+      wheelVisualScale: Number(cfgWheelVisualScale.value),
+      trailPoints: Number(cfgTrailPoints.value),
+      maxDt: Number(cfgMaxDt.value),
+      trackPreset: cfgTrackPreset.value,
+      lineWidth: Number(cfgLineWidth.value),
+      svgPath: cfgSvgPath.value,
+    },
+    camera: {
+      view: {
+        offsetX: sim.camera.offsetX,
+        offsetY: sim.camera.offsetY,
+        zoom: sim.camera.scale,
+        followCar: sim.camera.followCar,
+      },
+      vision: {
+        x: Number(visionCamX.value),
+        y: Number(visionCamY.value),
+        z: Number(visionCamZ.value),
+        pitchDeg: Number(visionPitch.value),
+        fovHDeg: Number(visionFovH.value),
+        fovVDeg: Number(visionFovV.value),
+      },
+    },
+    irSensors: {
+      sensors,
+    },
+    code: {
+      source: getControllerSource(),
+    },
+  };
+}
+
+function downloadJson(payload, fileName) {
+  const text = JSON.stringify(payload, null, 2);
+  const blob = new Blob([text], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function setIfFinite(inputEl, value) {
+  const num = Number(value);
+  if (Number.isFinite(num)) inputEl.value = String(num);
+}
+
+function applyImportedPayload(payload) {
+  if (!payload || typeof payload !== "object") {
+    throw new Error("Imported JSON root must be an object.");
+  }
+
+  const settings = payload.settings || {};
+  setIfFinite(cfgTrackWidth, settings.trackWidth);
+  setIfFinite(cfgWheelBase, settings.wheelBase);
+  setIfFinite(cfgMaxWheelSpeed, settings.maxWheelSpeed);
+  setIfFinite(cfgWheelVisualScale, settings.wheelVisualScale);
+  setIfFinite(cfgTrailPoints, settings.trailPoints);
+  setIfFinite(cfgMaxDt, settings.maxDt);
+  if (typeof settings.trackPreset === "string") cfgTrackPreset.value = settings.trackPreset;
+  setIfFinite(cfgLineWidth, settings.lineWidth);
+  if (typeof settings.svgPath === "string") cfgSvgPath.value = settings.svgPath;
+
+  const camera = payload.camera || {};
+  const view = camera.view || {};
+  setIfFinite(camOffsetX, view.offsetX);
+  setIfFinite(camOffsetY, view.offsetY);
+  setIfFinite(camZoom, view.zoom);
+  if (typeof view.followCar === "boolean") {
+    sim.camera.followCar = view.followCar;
+  }
+
+  const vision = camera.vision || {};
+  setIfFinite(visionCamX, vision.x);
+  setIfFinite(visionCamY, vision.y);
+  setIfFinite(visionCamZ, vision.z);
+  setIfFinite(visionPitch, vision.pitchDeg);
+  setIfFinite(visionFovH, vision.fovHDeg);
+  setIfFinite(visionFovV, vision.fovVDeg);
+
+  const irSensors = payload.irSensors || {};
+  if (Array.isArray(irSensors.sensors)) {
+    cfgSensors.value = JSON.stringify(irSensors.sensors, null, 2);
+  }
+
+  const code = payload.code || {};
+  if (typeof code.source === "string") {
+    setControllerSource(code.source);
+  }
+
+  applySimConfigFromInputs();
+  sim.camera.offsetX = readNumberInput(camOffsetX, -5000, 5000, sim.camera.offsetX);
+  sim.camera.offsetY = readNumberInput(camOffsetY, -5000, 5000, sim.camera.offsetY);
+  sim.camera.scale = readNumberInput(camZoom, 10, 300, sim.camera.scale);
+  syncCameraInputs();
+  updateCameraLabels();
+
+  applyTrackAndSensorConfig();
+  applyVisionConfigFromInputs();
 }
 
 function executeController(dt) {
@@ -414,6 +557,19 @@ function renderVision() {
 function setStatus(message, isError = false) {
   codeStatus.textContent = message;
   codeStatus.style.color = isError ? "#9e352f" : "#27465f";
+}
+
+function updateCodeModeButton() {
+  if (!toggleCodeMode) return;
+  if (sim.codeMode) {
+    toggleCodeMode.classList.remove("safe");
+    toggleCodeMode.classList.add("warn");
+    toggleCodeMode.innerHTML = "<i class=\"bi bi-stop-circle\"></i><span>Disable Code Mode</span>";
+  } else {
+    toggleCodeMode.classList.remove("warn");
+    toggleCodeMode.classList.add("safe");
+    toggleCodeMode.innerHTML = "<i class=\"bi bi-play-circle\"></i><span>Enable Code Mode</span>";
+  }
 }
 
 function renderDebugLog() {
@@ -756,6 +912,7 @@ function stepSimulation(dt) {
       executeController(dt);
     } catch (err) {
       sim.codeMode = false;
+      updateCodeModeButton();
       setStatus(`Code error: ${err.message}`, true);
     }
   }
@@ -845,7 +1002,7 @@ function updateCameraLabels() {
   camOffsetXVal.textContent = `${sim.camera.offsetX}`;
   camOffsetYVal.textContent = `${sim.camera.offsetY}`;
   camZoomVal.textContent = `${sim.camera.scale}`;
-  camFollowToggle.textContent = `Follow Car: ${sim.camera.followCar ? "On" : "Off"}`;
+  camFollowToggle.innerHTML = `<i class="bi bi-bullseye"></i><span>Follow Car: ${sim.camera.followCar ? "On" : "Off"}</span>`;
 }
 
 function syncSimConfigInputs() {
@@ -1102,6 +1259,14 @@ for (const visionInput of [visionCamX, visionCamY, visionCamZ, visionPitch, visi
 
 clearDebug.addEventListener("click", clearDebugLog);
 
+if (clearMemory) {
+  clearMemory.addEventListener("click", () => {
+    sim.scriptMemory = {};
+    renderMemoryView();
+    setStatus("Script memory cleared.");
+  });
+}
+
 for (const configInput of [
   cfgTrackWidth,
   cfgWheelBase,
@@ -1118,6 +1283,40 @@ if (applyTrackSensors) applyTrackSensors.addEventListener("click", applyTrackAnd
 startTrackDraw.addEventListener("click", beginTrackDraw);
 finishTrackDraw.addEventListener("click", finishTrackDrawMode);
 clearTrackDraw.addEventListener("click", clearTrackDraft);
+
+if (exportJson) {
+  exportJson.addEventListener("click", () => {
+    try {
+      const payload = buildExportPayload();
+      downloadJson(payload, "skid-steer-sim-config.json");
+    } catch (err) {
+      setIoStatus(`Export failed: ${err.message}`, true);
+    }
+  });
+}
+
+if (importJson) {
+  importJson.addEventListener("click", () => {
+    if (importJsonFile) importJsonFile.click();
+  });
+}
+
+if (importJsonFile) {
+  importJsonFile.addEventListener("change", async (event) => {
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      applyImportedPayload(parsed);
+    } catch (err) {
+      setIoStatus(`Import failed: ${err.message}`, true);
+    } finally {
+      importJsonFile.value = "";
+    }
+  });
+}
 
 canvas.addEventListener("mousedown", (event) => {
   if (sim.track.drawMode) {
@@ -1168,7 +1367,11 @@ canvas.addEventListener("wheel", (event) => {
 
 document.getElementById("toggleRun").addEventListener("click", (event) => {
   sim.running = !sim.running;
-  event.target.textContent = sim.running ? "Pause" : "Resume";
+  const button = event.currentTarget;
+  button.innerHTML = sim.running ? "<i class=\"bi bi-pause-fill\"></i>" : "<i class=\"bi bi-play-fill\"></i>";
+  const label = sim.running ? "Pause simulation" : "Resume simulation";
+  button.setAttribute("aria-label", label);
+  button.setAttribute("title", label);
 });
 
 document.getElementById("zeroSpeeds").addEventListener("click", () => {
@@ -1184,16 +1387,27 @@ document.getElementById("resetPose").addEventListener("click", () => {
   updateMetrics();
 });
 
-document.getElementById("enableCode").addEventListener("click", () => {
-  try {
-    compileController();
-    sim.codeMode = true;
-    setStatus("Code mode enabled. Your script is running every frame.");
-  } catch (err) {
-    sim.codeMode = false;
-    setStatus(`Compile error: ${err.message}`, true);
-  }
-});
+if (toggleCodeMode) {
+  toggleCodeMode.addEventListener("click", () => {
+    if (sim.codeMode) {
+      sim.codeMode = false;
+      updateCodeModeButton();
+      setStatus("Code mode disabled.");
+      return;
+    }
+
+    try {
+      compileController();
+      sim.codeMode = true;
+      updateCodeModeButton();
+      setStatus("Code mode enabled. Your script is running every frame.");
+    } catch (err) {
+      sim.codeMode = false;
+      updateCodeModeButton();
+      setStatus(`Compile error: ${err.message}`, true);
+    }
+  });
+}
 
 document.getElementById("runOnce").addEventListener("click", () => {
   try {
@@ -1204,11 +1418,6 @@ document.getElementById("runOnce").addEventListener("click", () => {
   } catch (err) {
     setStatus(`Run error: ${err.message}`, true);
   }
-});
-
-document.getElementById("disableCode").addEventListener("click", () => {
-  sim.codeMode = false;
-  setStatus("Code mode disabled.");
 });
 
 let lastTime = performance.now();
@@ -1253,5 +1462,6 @@ syncVisionInputs();
 renderMemoryView();
 applyTrackAndSensorConfig();
 applyVisionConfigFromInputs();
+updateCodeModeButton();
 addDebugLine("Debug ready. Use api.log(...) and api.clearLog().");
 requestAnimationFrame(loop);

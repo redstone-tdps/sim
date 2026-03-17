@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="./dep/fonts.css">
   <link rel="stylesheet" href="./dep/codemirror.min.css" />
   <link rel="stylesheet" href="./dep/neo.min.css" />
+  <link rel="stylesheet" href="./dep/bootstrap-icons.min.css" />
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
@@ -90,6 +91,18 @@
           <input id="visionFovV" type="number" min="20" max="170" step="1" value="56" />
         </div>
       </div>
+      <div style="margin: 0.2rem 0.5rem 0.5rem; display: flex; justify-content: space-between; gap: 0.8rem; flex-wrap: wrap; align-items: center;">
+        <div class="button-row" style="margin: 0;">
+          <button id="toggleRun" class="safe icon-only" aria-label="Pause simulation" title="Pause simulation"><i class="bi bi-pause-fill"></i></button>
+          <button id="resetPose" class="warn"><i class="bi bi-arrow-counterclockwise"></i><span>Reset Pose</span></button>
+          <button id="toggleCodeMode" class="safe"><i class="bi bi-play-circle"></i><span>Enable Code Mode</span></button>
+        </div>
+        <div class="button-row" style="margin: 0;">
+          <button id="exportJson" class="secondary"><i class="bi bi-box-arrow-up"></i><span>Export JSON</span></button>
+          <button id="importJson" class="safe"><i class="bi bi-box-arrow-in-down"></i><span>Import JSON</span></button>
+          <input id="importJsonFile" type="file" accept="application/json,.json" hidden />
+        </div>
+      </div>
       <canvas id="simCanvas" width="900" height="560"></canvas>
 
       <section class="code code-inline">
@@ -157,10 +170,9 @@ binary.delete();
 gray.delete();
 src.delete();</textarea>
         <div class="button-row" style="margin-top: 0.6rem;">
-          <button id="enableCode" class="safe">Enable Code Mode</button>
-          <button id="runOnce" class="secondary">Run Once</button>
-          <button id="disableCode" class="warn">Disable Code Mode</button>
-          <button id="clearDebug" class="secondary">Clear Debug</button>
+          <button id="runOnce" class="secondary"><i class="bi bi-skip-forward"></i><span>Run Once</span></button>
+          <button id="clearMemory" class="secondary"><i class="bi bi-journal-x"></i><span>Clear Memory</span></button>
+          <button id="clearDebug" class="secondary"><i class="bi bi-eraser"></i><span>Clear Debug</span></button>
         </div>
         <div class="status" id="codeStatus">Code mode disabled.</div>
         <details class="api-doc" open>
@@ -196,9 +208,7 @@ api.mem.keys()</pre>
       <section class="panel controls">
         <h2 class="section-title">Wheel Controls</h2>
         <div class="button-row">
-          <button id="toggleRun" class="safe">Pause</button>
-          <button id="zeroSpeeds" class="secondary">Zero Speeds</button>
-          <button id="resetPose" class="warn">Reset Pose</button>
+          <button id="zeroSpeeds" class="secondary"><i class="bi bi-slash-circle"></i><span>Zero Speeds</span></button>
         </div>
 
         <div class="wheel-grid" id="wheelGrid"></div>
@@ -228,10 +238,10 @@ api.mem.keys()</pre>
         <label class="mini-label" for="cfgSvgPath">svg path (meters, e.g. M -1 0 L 1 0)</label>
         <textarea id="cfgSvgPath" class="small-textarea">M 0 0 L 1.2 0 L 1.2 0.8 L 0 0.8 Z</textarea>
         <div class="button-row" style="margin-top: 0.6rem;">
-          <button id="applyTrack" class="safe">Apply Track</button>
-          <button id="startTrackDraw" class="secondary">Start Draw</button>
-          <button id="finishTrackDraw" class="secondary">Finish Draw</button>
-          <button id="clearTrackDraw" class="warn">Clear Draw</button>
+          <button id="applyTrack" class="safe"><i class="bi bi-map"></i><span>Apply Track</span></button>
+          <button id="startTrackDraw" class="secondary"><i class="bi bi-pencil"></i><span>Start Draw</span></button>
+          <button id="finishTrackDraw" class="secondary"><i class="bi bi-check2-circle"></i><span>Finish Draw</span></button>
+          <button id="clearTrackDraw" class="warn"><i class="bi bi-trash3"></i><span>Clear Draw</span></button>
         </div>
         <div class="status" id="trackStatus">Track ready.</div>
       </section>
@@ -245,7 +255,7 @@ api.mem.keys()</pre>
   {"name":"R","x":0.16,"y":-0.05}
 ]</textarea>
         <div class="button-row" style="margin-top: 0.6rem;">
-          <button id="applyTrackSensors" class="safe">Apply Sensors</button>
+          <button id="applyTrackSensors" class="safe"><i class="bi bi-broadcast"></i><span>Apply Sensors</span></button>
         </div>
       </section>
 
@@ -265,8 +275,8 @@ api.mem.keys()</pre>
           <div class="camera-value" id="camZoomVal">220</div>
         </div>
         <div class="button-row" style="margin-top: 0.6rem;">
-          <button id="camFollowToggle" class="secondary">Follow Car: Off</button>
-          <button id="camReset" class="warn">Reset Camera</button>
+          <button id="camFollowToggle" class="secondary"><i class="bi bi-bullseye"></i><span>Follow Car: Off</span></button>
+          <button id="camReset" class="warn"><i class="bi bi-camera"></i><span>Reset Camera</span></button>
         </div>
       </section>
 

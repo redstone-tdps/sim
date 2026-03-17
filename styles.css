@@ -210,6 +210,9 @@ button {
   border: 0;
   border-radius: 10px;
   padding: 0.52rem 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
   font-family: inherit;
   font-weight: 600;
   cursor: pointer;
@@ -233,6 +236,18 @@ button.safe {
 
 button.warn {
   background: var(--warn);
+}
+
+button.icon-only {
+  min-width: 2.35rem;
+  justify-content: center;
+  gap: 0;
+  padding: 0.52rem 0.62rem;
+}
+
+button i.bi {
+  font-size: 0.95rem;
+  line-height: 1;
 }
 
 .wheel-grid {
