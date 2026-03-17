@@ -518,39 +518,77 @@ function renderVision() {
 
     const px = cx + fx * (camX / camZ);
     const py = cy + fy * (camY / camZ);
-    const widthPx = clamp((fx * sim.track.lineWidth) / camZ, 1, 18);
-    return { x: px, y: py, width: widthPx };
+    return { x: px, y: py, z: camZ };
   };
 
-  visionCtx.strokeStyle = "#232323";
   visionCtx.fillStyle = "#202020";
-  visionCtx.lineCap = "round";
-  visionCtx.lineJoin = "round";
 
   for (const line of sim.track.visionPolyline) {
-    let prev = null;
-    for (const point of line) {
-      const projected = projectWorldPoint(point.x, point.y);
-      if (!projected) {
-        prev = null;
+    const halfW = sim.track.lineWidth * 0.5;
+    let runLeft = [];
+    let runRight = [];
+
+    const flushRun = () => {
+      if (runLeft.length < 2 || runRight.length < 2) {
+        runLeft = [];
+        runRight = [];
+        return;
+      }
+
+      visionCtx.beginPath();
+      visionCtx.moveTo(runLeft[0].x, runLeft[0].y);
+      for (let i = 1; i < runLeft.length; i += 1) {
+        visionCtx.lineTo(runLeft[i].x, runLeft[i].y);
+      }
+      for (let i = runRight.length - 1; i >= 0; i -= 1) {
+        visionCtx.lineTo(runRight[i].x, runRight[i].y);
+      }
+      visionCtx.closePath();
+      visionCtx.fill();
+      runLeft = [];
+      runRight = [];
+    };
+
+    for (let index = 0; index < line.length; index += 1) {
+      const current = line[index];
+      const prev = index > 0 ? line[index - 1] : null;
+      const next = index + 1 < line.length ? line[index + 1] : null;
+
+      let tx = 0;
+      let ty = 0;
+      if (prev && next) {
+        tx = next.x - prev.x;
+        ty = next.y - prev.y;
+      } else if (next) {
+        tx = next.x - current.x;
+        ty = next.y - current.y;
+      } else if (prev) {
+        tx = current.x - prev.x;
+        ty = current.y - prev.y;
+      }
+
+      const len = Math.hypot(tx, ty);
+      if (len < 1e-6) {
+        flushRun();
         continue;
       }
 
-      if (projected.x >= -30 && projected.x <= width + 30 && projected.y >= -30 && projected.y <= height + 30) {
-        visionCtx.beginPath();
-        visionCtx.arc(projected.x, projected.y, projected.width * 0.45, 0, 2 * Math.PI);
-        visionCtx.fill();
+      const nx = -ty / len;
+      const ny = tx / len;
+
+      const left = projectWorldPoint(current.x + nx * halfW, current.y + ny * halfW);
+      const right = projectWorldPoint(current.x - nx * halfW, current.y - ny * halfW);
+
+      if (!left || !right) {
+        flushRun();
+        continue;
       }
 
-      if (prev) {
-        visionCtx.lineWidth = (prev.width + projected.width) * 0.5;
-        visionCtx.beginPath();
-        visionCtx.moveTo(prev.x, prev.y);
-        visionCtx.lineTo(projected.x, projected.y);
-        visionCtx.stroke();
-      }
-      prev = projected;
+      runLeft.push(left);
+      runRight.push(right);
     }
+
+    flushRun();
   }
 }
 
