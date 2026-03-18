@@ -295,7 +295,7 @@ function updateMetrics() {
   const actualFps = sim.lastDt > 1e-6 ? 1 / sim.lastDt : 0;
   const wallFps = sim.lastWallDt > 1e-6 ? 1 / sim.lastWallDt : 0;
   const fpsCompact = `${n(minFps, 1)}/${n(actualFps, 1)}/${n(wallFps, 1)}(${n(sim.realTimeFactor, 2)}x)`;
-  const fpsDetail = "min fps = 1/maxDt (configured lower bound); actual fps = 1/dt (simulation step after clamp); wall-time fps = 1/wallDt (real frame interval).";
+  const fpsDetail = "min fps = 1/maxDt (configured lower bound); actual fps = 1/dt (simulation step after clamp); wall-time fps = 1/wallDt (real frame interval); ratio x = wall-time fps / min fps.";
   const sensorSummary = sim.track.sensorReadings
     .map((s) => `${s.name}:${n(s.value, 2)}`)
     .join(" ");
@@ -1643,7 +1643,7 @@ function loop(now) {
   lastTime = now;
   sim.lastDt = dt;
   sim.lastWallDt = wallDt;
-  sim.realTimeFactor = wallDt > 1e-6 ? dt / wallDt : 1;
+  sim.realTimeFactor = wallDt > 1e-6 && sim.maxDt > 1e-6 ? sim.maxDt / wallDt : 1;
 
   if (sim.running) {
     stepSimulation(dt);
