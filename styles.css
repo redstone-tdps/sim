@@ -26,6 +26,33 @@ body {
   min-height: 100vh;
 }
 
+.startup-notice-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2500;
+  background: rgba(12, 20, 29, 0.5);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.startup-notice-backdrop.hidden {
+  display: none;
+}
+
+.startup-notice-card {
+  width: min(720px, 100%);
+  padding: 1rem 1rem 0.9rem;
+}
+
+.startup-note-text {
+  margin: 0 0 0.5rem;
+  color: #2f485d;
+  line-height: 1.45;
+}
+
 .site-header {
   max-width: 1200px;
   margin: 0.9rem auto 0;

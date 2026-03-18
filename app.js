@@ -1,5 +1,7 @@
 const canvas = document.getElementById("simCanvas");
 const ctx = canvas.getContext("2d");
+const startupNotice = document.getElementById("startupNotice");
+const closeStartupNotice = document.getElementById("closeStartupNotice");
 const wheelGrid = document.getElementById("wheelGrid");
 const metrics = document.getElementById("metrics");
 const codeInput = document.getElementById("codeInput");
@@ -194,6 +196,16 @@ function updateOverlayToggleButton() {
   toggleOverlay.innerHTML = sim.vision.showOverlay
     ? "<i class=\"bi bi-eye\"></i><span>Overlays: On</span>"
     : "<i class=\"bi bi-eye-slash\"></i><span>Overlays: Off</span>";
+}
+
+function showStartupNotice() {
+  if (!startupNotice) return;
+  startupNotice.classList.remove("hidden");
+}
+
+function hideStartupNotice() {
+  if (!startupNotice) return;
+  startupNotice.classList.add("hidden");
 }
 
 function bodyToWorld(localX, localY, pose) {
@@ -1453,6 +1465,18 @@ if (toggleOverlay) {
   });
 }
 
+if (closeStartupNotice) {
+  closeStartupNotice.addEventListener("click", hideStartupNotice);
+}
+
+if (startupNotice) {
+  startupNotice.addEventListener("click", (event) => {
+    if (event.target === startupNotice) {
+      hideStartupNotice();
+    }
+  });
+}
+
 canvas.addEventListener("mousedown", (event) => {
   if (sim.track.drawMode) {
     const rect = canvas.getBoundingClientRect();
@@ -1599,5 +1623,6 @@ applyTrackAndSensorConfig();
 applyVisionConfigFromInputs();
 updateOverlayToggleButton();
 updateCodeModeButton();
+showStartupNotice();
 addDebugLine("Debug ready. Use api.log(...) and api.clearLog().");
 requestAnimationFrame(loop);
