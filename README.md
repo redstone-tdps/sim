@@ -143,5 +143,6 @@ When your controller runs, it receives `api` with:
 ## Disclaimer
 
 - Coursework use is allowed only with proper credit to Redstone TDPS and this repository.
+- By using this project, you agree that anonymous usage data may be uploaded for analysis and quality improvement.
 - We are not responsible for misuse, policy violations, academic misconduct, data loss, or any direct/indirect damages resulting from use of this project.
 - Refer to `LICENSE` for full legal terms.

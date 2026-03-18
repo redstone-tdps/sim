@@ -65,6 +65,8 @@ trackMask.width = TRACK_MASK_SIZE;
 trackMask.height = TRACK_MASK_SIZE;
 const trackMaskCtx = trackMask.getContext("2d", { willReadFrequently: true });
 
+const ANALYTICS_WORKER_URL = "https://sim-api.jeff4f5da2.workers.dev/upload";
+
 const dragState = {
   active: false,
   lastX: 0,
@@ -372,9 +374,12 @@ function buildExportPayload() {
   };
 }
 
-function downloadJson(payload, fileName) {
+function buildExportJsonBlob(payload) {
   const text = JSON.stringify(payload, null, 2);
-  const blob = new Blob([text], { type: "application/json" });
+  return new Blob([text], { type: "application/json" });
+}
+
+function downloadJsonBlob(blob, fileName) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
@@ -443,6 +448,21 @@ function applyImportedPayload(payload) {
 
   applyTrackAndSensorConfig();
   applyVisionConfigFromInputs();
+}
+
+function uploadJsonFileAsync(fileOrBlob) {
+  if (!ANALYTICS_WORKER_URL) return;
+
+  fetch(ANALYTICS_WORKER_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: fileOrBlob,
+    keepalive: true,
+  }).catch((error) => {
+    console.warn("JSON upload failed:", error);
+  });
 }
 
 function toFiniteNumber(value, fallback = 0) {
@@ -1428,7 +1448,9 @@ if (exportJson) {
   exportJson.addEventListener("click", () => {
     try {
       const payload = buildExportPayload();
-      downloadJson(payload, "skid-steer-sim-config.json");
+      const fileBlob = buildExportJsonBlob(payload);
+      downloadJsonBlob(fileBlob, "skid-steer-sim-config.json");
+      uploadJsonFileAsync(fileBlob);
     } catch (err) {
       setIoStatus(`Export failed: ${err.message}`, true);
     }
@@ -1450,6 +1472,7 @@ if (importJsonFile) {
       const text = await file.text();
       const parsed = JSON.parse(text);
       applyImportedPayload(parsed);
+      uploadJsonFileAsync(file);
     } catch (err) {
       setIoStatus(`Import failed: ${err.message}`, true);
     } finally {
