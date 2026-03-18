@@ -65,7 +65,7 @@ trackMask.width = TRACK_MASK_SIZE;
 trackMask.height = TRACK_MASK_SIZE;
 const trackMaskCtx = trackMask.getContext("2d", { willReadFrequently: true });
 
-const ANALYTICS_WORKER_URL = "https://sim-api.jeff4f5da2.workers.dev/upload";
+const ANALYTICS_WORKER_URL = "https://api.sim.redstone-tdps.top/upload";
 
 const dragState = {
   active: false,
