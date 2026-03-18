@@ -56,6 +56,7 @@ const trackStatus = document.getElementById("trackStatus");
 
 const wheelNames = ["FL", "FR", "RL", "RR"];
 const wheelValueEls = {};
+const metricValueEls = {};
 let codeEditor = null;
 
 const TRACK_MASK_SIZE = 2400;
@@ -97,6 +98,9 @@ const sim = {
   maxWheelAccel: 8.0,
   wheelVisualScale: 1.0,
   maxDt: 0.04,
+  lastDt: 0,
+  lastWallDt: 0,
+  realTimeFactor: 1,
   camera: {
     offsetX: 0,
     offsetY: 0,
@@ -287,30 +291,48 @@ function updateMetrics() {
   const p = sim.pose;
   const k = sim.lastKinematics || { vx: 0, omega: 0, radius: Infinity };
   const d = sim.lastDiagnostics || { motionState: "STATIONARY", lateralSlipIndicator: 0 };
+  const minFps = sim.maxDt > 1e-6 ? 1 / sim.maxDt : 0;
+  const actualFps = sim.lastDt > 1e-6 ? 1 / sim.lastDt : 0;
+  const wallFps = sim.lastWallDt > 1e-6 ? 1 / sim.lastWallDt : 0;
+  const fpsCompact = `${n(minFps, 1)}/${n(actualFps, 1)}/${n(wallFps, 1)}(${n(sim.realTimeFactor, 2)}x)`;
+  const fpsDetail = "min fps = 1/maxDt (configured lower bound); actual fps = 1/dt (simulation step after clamp); wall-time fps = 1/wallDt (real frame interval).";
   const sensorSummary = sim.track.sensorReadings
     .map((s) => `${s.name}:${n(s.value, 2)}`)
     .join(" ");
 
   const values = [
-    ["x", `${n(p.x, 2)} m`],
-    ["y", `${n(p.y, 2)} m`],
-    ["theta", `${n(p.theta, 2)} rad`],
-    ["vx", `${n(k.vx, 2)} m/s`],
-    ["omega", `${n(k.omega, 2)} rad/s`],
-    ["radius", Number.isFinite(k.radius) ? `${n(k.radius, 2)} m` : "inf"],
-    ["motion", d.motionState],
-    ["sensors", sensorSummary || "n/a"],
+    ["x", `${n(p.x, 2)} m`, ""],
+    ["y", `${n(p.y, 2)} m`, ""],
+    ["theta", `${n(p.theta, 2)} rad`, ""],
+    ["vx", `${n(k.vx, 2)} m/s`, ""],
+    ["omega", `${n(k.omega, 2)} rad/s`, ""],
+    ["fps", fpsCompact, fpsDetail],
+    ["radius", Number.isFinite(k.radius) ? `${n(k.radius, 2)} m` : "inf", ""],
+    ["motion", d.motionState, ""],
+    ["sensors", sensorSummary || "n/a", ""],
   ];
 
-  metrics.innerHTML = "";
-  for (const [label, val] of values) {
-    const row = document.createElement("div");
-    const left = document.createElement("span");
-    left.textContent = label;
-    const right = document.createElement("strong");
+  if (metrics.childElementCount === 0) {
+    metrics.innerHTML = "";
+    for (const [label, val, tooltip] of values) {
+      const row = document.createElement("div");
+      const left = document.createElement("span");
+      left.textContent = label;
+      const right = document.createElement("strong");
+      right.textContent = val;
+      right.title = tooltip;
+      metricValueEls[label] = right;
+      row.append(left, right);
+      metrics.appendChild(row);
+    }
+    return;
+  }
+
+  for (const [label, val, tooltip] of values) {
+    const right = metricValueEls[label];
+    if (!right) continue;
     right.textContent = val;
-    row.append(left, right);
-    metrics.appendChild(row);
+    right.title = tooltip;
   }
 }
 
@@ -1616,8 +1638,12 @@ let lastTime = performance.now();
 
 function loop(now) {
   updateOpenCvStatus();
-  const dt = Math.min(sim.maxDt, (now - lastTime) / 1000);
+  const wallDt = Math.max(0, (now - lastTime) / 1000);
+  const dt = Math.min(sim.maxDt, wallDt);
   lastTime = now;
+  sim.lastDt = dt;
+  sim.lastWallDt = wallDt;
+  sim.realTimeFactor = wallDt > 1e-6 ? dt / wallDt : 1;
 
   if (sim.running) {
     stepSimulation(dt);
