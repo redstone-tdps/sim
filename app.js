@@ -924,92 +924,36 @@ function densifyPolyline(line, maxStep = 0.03) {
 }
 
 function parseSvgPathToPolyline(pathText) {
-  const tokens = pathText
-    .replace(/,/g, " ")
-    .match(/[a-zA-Z]|[-+]?\d*\.?\d+(?:e[-+]?\d+)?/gi);
-  if (!tokens) return [];
+  if (typeof pathText !== "string" || !pathText.trim()) return [];
 
-  const lines = [];
-  let index = 0;
-  let command = null;
-  let x = 0;
-  let y = 0;
-  let subStartX = 0;
-  let subStartY = 0;
-  let currentLine = [];
+  const NS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(NS, "svg");
+  const path = document.createElementNS(NS, "path");
+  svg.appendChild(path);
 
-  const isCommand = (token) => /^[a-zA-Z]$/.test(token);
-  const readNumber = () => {
-    if (index >= tokens.length) return null;
-    const token = tokens[index];
-    if (isCommand(token)) return null;
-    const value = Number(token);
-    if (!Number.isFinite(value)) return null;
-    index += 1;
-    return value;
+  const sampleSubPath = (subPathText) => {
+    path.setAttribute("d", subPathText);
+    const totalLength = path.getTotalLength();
+    if (!Number.isFinite(totalLength) || totalLength <= 0) return [];
+
+    const sampleCount = Math.max(2, Math.ceil(totalLength / 0.03));
+    const points = [];
+    for (let i = 0; i <= sampleCount; i += 1) {
+      const d = (i / sampleCount) * totalLength;
+      const point = path.getPointAtLength(d);
+      points.push({ x: point.x, y: point.y });
+    }
+    return points;
   };
 
-  while (index < tokens.length) {
-    if (isCommand(tokens[index])) {
-      command = tokens[index];
-      index += 1;
-    }
-    if (!command) break;
-
-    if (command === "M" || command === "m") {
-      const px = readNumber();
-      const py = readNumber();
-      if (px === null || py === null) break;
-      x = command === "m" ? x + px : px;
-      y = command === "m" ? y + py : py;
-      subStartX = x;
-      subStartY = y;
-      if (currentLine.length > 1) lines.push(currentLine);
-      currentLine = [{ x, y }];
-      command = command === "m" ? "l" : "L";
-      continue;
-    }
-
-    if (command === "L" || command === "l") {
-      const px = readNumber();
-      const py = readNumber();
-      if (px === null || py === null) continue;
-      x = command === "l" ? x + px : px;
-      y = command === "l" ? y + py : py;
-      currentLine.push({ x, y });
-      continue;
-    }
-
-    if (command === "H" || command === "h") {
-      const px = readNumber();
-      if (px === null) continue;
-      x = command === "h" ? x + px : px;
-      currentLine.push({ x, y });
-      continue;
-    }
-
-    if (command === "V" || command === "v") {
-      const py = readNumber();
-      if (py === null) continue;
-      y = command === "v" ? y + py : py;
-      currentLine.push({ x, y });
-      continue;
-    }
-
-    if (command === "Z" || command === "z") {
-      if (currentLine.length > 0) {
-        currentLine.push({ x: subStartX, y: subStartY });
-      }
-      if (currentLine.length > 1) lines.push(currentLine);
-      currentLine = [];
-      continue;
-    }
-
-    break;
+  try {
+    const subPaths = pathText.match(/[Mm][^Mm]*/g) || [pathText];
+    return subPaths
+      .map((subPath) => sampleSubPath(subPath.trim()))
+      .filter((line) => line.length > 1);
+  } catch {
+    return [];
   }
-
-  if (currentLine.length > 1) lines.push(currentLine);
-  return lines;
 }
 
 function rebuildVisionTrackPolyline() {
