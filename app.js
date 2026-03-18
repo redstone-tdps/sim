@@ -65,6 +65,12 @@ trackMask.width = TRACK_MASK_SIZE;
 trackMask.height = TRACK_MASK_SIZE;
 const trackMaskCtx = trackMask.getContext("2d", { willReadFrequently: true });
 
+const TDPS_L_PRESET_PATH =
+  "M 0 0 L 0 2 L -0.15 2.15 L 0 2 L 0.15 2.15 L 0 2 L 0 3.75 A 0.25 0.25 0 0 0 0.5 3.75 L 0.5 2.15 L 0.35 2 L 0.5 2.15 L 0.65 2 L 0.5 2.15 L 0.5 0.7 C 0.7 0.6, 0.7 0.5, 0.5 0.4 C 0.3 0.3, 0.3 0.2, 0.5 0.1 C 0.7 0, 0.7 -0.1, 0.5 -0.2 C 0.3 -0.3, 0.3 -0.4, 0.5 -0.5 L 1.2 -0.5 L 1.2 0 L 0.95 0 L 0.95 0.5 L 1.95 0.5 L 1.95 1 L 0.95 1 L 0.95 1.5 L 1.45 1.5 L 1.45 0 L 1.2 0 L 1.45 0 L 1.45 1.5 L 1.2 1.5 L 1.2 3 L 1.4 3 A 0.25 0.25 0 1 1 1.4 3.001 M 1.4 3.5 A 0.25 0.25 0 1 1 1.4 3.501 M 1.4 4 A 0.25 0.25 0 1 1 1.4 4.001 M 1.4 4.5 A 0.25 0.25 0 1 1 1.4 4.501 M 1.4 4.5 L 1.2 4.5 L 1.2 3 M 1.9 4.5 L 2.8 4.5 L 2.8 3.75 L 3.4 3.75 L 3.4 3.05 L 2.2 3.05 L 2.2 3.75 L 2.8 3.75 M 2.8 3.05 L 2.8 2 A 0.25 0.25 0 0 1 3.3 2 L 3.3 2.2 A 0.25 0.25 0 0 0 3.8 2.2 L 4.1 2.2 M 3.05 1.75 L 3.05 1.4 L 3.3 1.4 L 3.3 0.9 L 2.8 0.9 L 2.8 1.4 L 3.05 1.4";
+
+const TDPS_R_PRESET_PATH =
+  "M 0 0 L 0 2 L 0.15 2.15 L 0 2 L -0.15 2.15 L 0 2 L 0 3.75 A 0.25 0.25 0 0 1 -0.5 3.75 L -0.5 2.15 L -0.35 2 L -0.5 2.15 L -0.65 2 L -0.5 2.15 L -0.5 0.7 C -0.7 0.6, -0.7 0.5, -0.5 0.4 C -0.3 0.3, -0.3 0.2, -0.5 0.1 C -0.7 0, -0.7 -0.1, -0.5 -0.2 C -0.3 -0.3, -0.3 -0.4, -0.5 -0.5 L -1.2 -0.5 L -1.2 0 L -0.95 0 L -0.95 0.5 L -1.95 0.5 L -1.95 1 L -0.95 1 L -0.95 1.5 L -1.45 1.5 L -1.45 0 L -1.2 0 L -1.45 0 L -1.45 1.5 L -1.2 1.5 L -1.2 3 L -1.4 3 A 0.25 0.25 0 1 0 -1.4 3.001 M -1.4 3.5 A 0.25 0.25 0 1 0 -1.4 3.501 M -1.4 4 A 0.25 0.25 0 1 0 -1.4 4.001 M -1.4 4.5 A 0.25 0.25 0 1 0 -1.4 4.501 M -1.4 4.5 L -1.2 4.5 L -1.2 3 M -1.9 4.5 L -2.8 4.5 L -2.8 3.75 L -3.4 3.75 L -3.4 3.05 L -2.2 3.05 L -2.2 3.75 L -2.8 3.75 M -2.8 3.05 L -2.8 2 A 0.25 0.25 0 0 0 -3.3 2 L -3.3 2.2 A 0.25 0.25 0 0 1 -3.8 2.2 L -4.1 2.2 M -3.05 1.75 L -3.05 1.4 L -3.3 1.4 L -3.3 0.9 L -2.8 0.9 L -2.8 1.4 L -3.05 1.4";
+
 const ANALYTICS_WORKER_URL = "https://api.sim.redstone-tdps.top/upload";
 
 const dragState = {
@@ -895,6 +901,14 @@ function drawTrackGeometry(targetCtx) {
     targetCtx.stroke(sim.track.svgPath2D);
     return;
   }
+  if (sim.track.preset === "tdps-l") {
+    targetCtx.stroke(new Path2D(TDPS_L_PRESET_PATH));
+    return;
+  }
+  if (sim.track.preset === "tdps-r") {
+    targetCtx.stroke(new Path2D(TDPS_R_PRESET_PATH));
+    return;
+  }
   drawPresetTrackPath(targetCtx, sim.track.preset);
   targetCtx.stroke();
 }
@@ -1023,6 +1037,10 @@ function rebuildVisionTrackPolyline() {
     ];
   } else if (sim.track.preset === "oval") {
     lines = [sampleEllipsePoints(0, 0, 1.45, 0.9, 220)];
+  } else if (sim.track.preset === "tdps-l") {
+    lines = parseSvgPathToPolyline(TDPS_L_PRESET_PATH);
+  } else if (sim.track.preset === "tdps-r") {
+    lines = parseSvgPathToPolyline(TDPS_R_PRESET_PATH);
   } else if (sim.track.preset === "svg") {
     lines = parseSvgPathToPolyline(sim.track.svgPath);
   }
