@@ -139,3 +139,9 @@ When your controller runs, it receives `api` with:
 
 - Requires a modern browser with Canvas 2D support.
 - Dependencies are loaded from local `./dep/` assets in this project.
+
+## Disclaimer
+
+- Coursework use is allowed only with proper credit to Redstone TDPS and this repository.
+- We are not responsible for misuse, policy violations, academic misconduct, data loss, or any direct/indirect damages resulting from use of this project.
+- Refer to `LICENSE` for full legal terms.
