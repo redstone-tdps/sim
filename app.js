@@ -1469,14 +1469,6 @@ if (closeStartupNotice) {
   closeStartupNotice.addEventListener("click", hideStartupNotice);
 }
 
-if (startupNotice) {
-  startupNotice.addEventListener("click", (event) => {
-    if (event.target === startupNotice) {
-      hideStartupNotice();
-    }
-  });
-}
-
 canvas.addEventListener("mousedown", (event) => {
   if (sim.track.drawMode) {
     const rect = canvas.getBoundingClientRect();
