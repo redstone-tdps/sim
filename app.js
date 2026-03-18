@@ -35,6 +35,7 @@ const cfgTrackWidth = document.getElementById("cfgTrackWidth");
 const cfgWheelBase = document.getElementById("cfgWheelBase");
 const cfgMaxWheelSpeed = document.getElementById("cfgMaxWheelSpeed");
 const cfgWheelVisualScale = document.getElementById("cfgWheelVisualScale");
+const cfgMaxWheelAccel = document.getElementById("cfgMaxWheelAccel");
 const cfgTrailPoints = document.getElementById("cfgTrailPoints");
 const cfgMaxDt = document.getElementById("cfgMaxDt");
 const cfgTrackPreset = document.getElementById("cfgTrackPreset");
@@ -74,6 +75,7 @@ const sim = {
   time: 0,
   pose: { x: 0, y: 0, theta: Math.PI / 2 },
   wheelSpeeds: { FL: 0, FR: 0, RL: 0, RR: 0 },
+  targetWheelSpeeds: { FL: 0, FR: 0, RL: 0, RR: 0 },
   trackWidth: 0.2,
   wheelBase: 0.4,
   trail: [],
@@ -82,6 +84,7 @@ const sim = {
   controller: null,
   maxTrailPoints: 900,
   maxAbsWheelSpeed: 4.0,
+  maxWheelAccel: 8.0,
   wheelVisualScale: 1.0,
   maxDt: 0.04,
   camera: {
@@ -130,7 +133,7 @@ function readNumberInput(inputEl, min, max, fallback) {
 
 function setWheelSpeed(name, value) {
   if (!wheelNames.includes(name)) return;
-  sim.wheelSpeeds[name] = clamp(value, -sim.maxAbsWheelSpeed, sim.maxAbsWheelSpeed);
+  sim.targetWheelSpeeds[name] = clamp(value, -sim.maxAbsWheelSpeed, sim.maxAbsWheelSpeed);
   updateWheelValue(name);
 }
 
@@ -148,7 +151,25 @@ function n(value, digits = 2) {
 function updateWheelValue(name) {
   const valueEl = wheelValueEls[name];
   if (valueEl) {
-    valueEl.textContent = `${n(sim.wheelSpeeds[name], 2)} m/s`;
+    const current = sim.wheelSpeeds[name];
+    const target = sim.targetWheelSpeeds[name];
+    if (Math.abs(current - target) < 1e-3) {
+      valueEl.textContent = `${n(current, 2)} m/s`;
+    } else {
+      valueEl.textContent = `${n(current, 2)} -> ${n(target, 2)} m/s`;
+    }
+  }
+}
+function applyWheelAccelerationLimit(dt) {
+  if (!(dt > 0)) return;
+
+  const maxDelta = sim.maxWheelAccel * dt;
+  for (const name of wheelNames) {
+    const current = sim.wheelSpeeds[name];
+    const target = clamp(sim.targetWheelSpeeds[name], -sim.maxAbsWheelSpeed, sim.maxAbsWheelSpeed);
+    const delta = clamp(target - current, -maxDelta, maxDelta);
+    sim.wheelSpeeds[name] = clamp(current + delta, -sim.maxAbsWheelSpeed, sim.maxAbsWheelSpeed);
+    updateWheelValue(name);
   }
 }
 
@@ -228,14 +249,14 @@ function buildWheelGrid() {
     minus.className = "small-btn secondary";
     minus.textContent = "-0.2";
     minus.addEventListener("click", () => {
-      setWheelSpeed(name, sim.wheelSpeeds[name] - 0.2);
+      setWheelSpeed(name, sim.targetWheelSpeeds[name] - 0.2);
     });
 
     const plus = document.createElement("button");
     plus.className = "small-btn secondary";
     plus.textContent = "+0.2";
     plus.addEventListener("click", () => {
-      setWheelSpeed(name, sim.wheelSpeeds[name] + 0.2);
+      setWheelSpeed(name, sim.targetWheelSpeeds[name] + 0.2);
     });
 
     wheelGrid.append(label, value, minus, plus);
@@ -306,6 +327,7 @@ function buildExportPayload() {
       trackWidth: Number(cfgTrackWidth.value),
       wheelBase: Number(cfgWheelBase.value),
       maxWheelSpeed: Number(cfgMaxWheelSpeed.value),
+      maxWheelAccel: Number(cfgMaxWheelAccel.value),
       wheelVisualScale: Number(cfgWheelVisualScale.value),
       trailPoints: Number(cfgTrailPoints.value),
       maxDt: Number(cfgMaxDt.value),
@@ -365,6 +387,7 @@ function applyImportedPayload(payload) {
   setIfFinite(cfgTrackWidth, settings.trackWidth);
   setIfFinite(cfgWheelBase, settings.wheelBase);
   setIfFinite(cfgMaxWheelSpeed, settings.maxWheelSpeed);
+  setIfFinite(cfgMaxWheelAccel, settings.maxWheelAccel);
   setIfFinite(cfgWheelVisualScale, settings.wheelVisualScale);
   setIfFinite(cfgTrailPoints, settings.trailPoints);
   setIfFinite(cfgMaxDt, settings.maxDt);
@@ -1016,6 +1039,7 @@ function stepSimulation(dt) {
       setStatus(`Code error: ${err.message}`, true);
     }
   }
+  applyWheelAccelerationLimit(dt);
 
   const result = calculatePositionChange(
     sim.pose,
@@ -1109,6 +1133,7 @@ function syncSimConfigInputs() {
   cfgTrackWidth.value = String(sim.trackWidth);
   cfgWheelBase.value = String(sim.wheelBase);
   cfgMaxWheelSpeed.value = String(sim.maxAbsWheelSpeed);
+  cfgMaxWheelAccel.value = String(sim.maxWheelAccel);
   cfgWheelVisualScale.value = String(sim.wheelVisualScale);
   cfgTrailPoints.value = String(sim.maxTrailPoints);
   cfgMaxDt.value = String(sim.maxDt);
@@ -1118,11 +1143,13 @@ function applySimConfigFromInputs() {
   sim.trackWidth = readNumberInput(cfgTrackWidth, 0.1, 5, sim.trackWidth);
   sim.wheelBase = readNumberInput(cfgWheelBase, 0.1, 8, sim.wheelBase);
   sim.maxAbsWheelSpeed = readNumberInput(cfgMaxWheelSpeed, 0.2, 20, sim.maxAbsWheelSpeed);
+  sim.maxWheelAccel = readNumberInput(cfgMaxWheelAccel, 0.1, 100, sim.maxWheelAccel);
   sim.wheelVisualScale = readNumberInput(cfgWheelVisualScale, 0.2, 3, sim.wheelVisualScale);
   sim.maxTrailPoints = Math.round(readNumberInput(cfgTrailPoints, 50, 20000, sim.maxTrailPoints));
   sim.maxDt = readNumberInput(cfgMaxDt, 0.005, 0.2, sim.maxDt);
 
   for (const name of wheelNames) {
+    sim.targetWheelSpeeds[name] = clamp(sim.targetWheelSpeeds[name], -sim.maxAbsWheelSpeed, sim.maxAbsWheelSpeed);
     sim.wheelSpeeds[name] = clamp(sim.wheelSpeeds[name], -sim.maxAbsWheelSpeed, sim.maxAbsWheelSpeed);
     updateWheelValue(name);
   }
@@ -1371,6 +1398,7 @@ for (const configInput of [
   cfgTrackWidth,
   cfgWheelBase,
   cfgMaxWheelSpeed,
+  cfgMaxWheelAccel,
   cfgWheelVisualScale,
   cfgTrailPoints,
   cfgMaxDt,
